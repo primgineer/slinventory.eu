@@ -198,8 +198,8 @@
 // ── Theme switcher ───────────────────────────────────────────
 (function() {
   const themes = {
-    dark: 'theme-dark.css',
-    pink: 'theme-pink.css',
+    dark: './theme-dark.css',
+    pink: './theme-pink.css',
   };
   const saved = localStorage.getItem('sl_inv_theme') || 'dark';
   const sheet = document.getElementById('theme-stylesheet');
