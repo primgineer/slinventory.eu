@@ -1,4 +1,3 @@
-
 // ============================================================
 // LLSD Binary Parser (JS port)
 // ============================================================
@@ -1238,6 +1237,15 @@ link:         ['link', 45, 46],
 
 let pendingFile = null;          // file waiting for modal confirm
 let parseFilterKeys = new Set(); // keys selected in modal; empty = load all
+let excludeSystemFolders = false;
+
+// preferred_type values that identify system/library folders to exclude
+const SYSTEM_FOLDER_TYPES = new Set([
+  'bodypart', 'callcard', 'clothing', 'current', 'favorite',
+  'my_otfts', 'gesture', 'landmark', 'lstndfnd', 'material',
+  'notecard', 'snapshot', 'inbox', 'lsltext', 'settings',
+  'sound', 'texture', 'trash',
+]);
 
 function buildParseModal() {
 for (const group of PARSE_FILTER_GROUPS) {
@@ -1282,24 +1290,61 @@ document.getElementById('parse-modal').classList.add('hidden');
 
 // Filter parsed data: remove items/categories whose type is not in the selected keys
 function applyParseFilter(data) {
-if (parseFilterKeys.size === 0) return data; // 0 selected = keep all (safety)
+  if (parseFilterKeys.size === 0 && !excludeSystemFolders) return data;
 
-// Build allowed type set
-const allowedTypes = new Set();
-for (const key of parseFilterKeys) {
-  for (const t of (PARSE_KEY_TO_TYPES[key] || [])) allowedTypes.add(String(t));
-}
+  let categories = data.categories || [];
+  let items = data.items || [];
 
-const keepCategories = parseFilterKeys.has('category');
+  // ── Step 1: exclude system folders and all their descendants ──
+  if (excludeSystemFolders) {
+    // Build a temporary parent→children map from the raw data
+    const tempChildren = {};
+    const tempCatById = {};
+    for (const cat of categories) {
+      const id = cat.cat_id || cat.category_id || cat.id;
+      if (!id) continue;
+      tempCatById[id] = cat;
+      tempChildren[id] = [];
+    }
+    for (const cat of categories) {
+      const id = cat.cat_id || cat.category_id || cat.id;
+      const pid = cat.parent_id;
+      if (pid && tempChildren[pid]) tempChildren[pid].push(id);
+    }
 
-return {
-  ...data,
-  categories: keepCategories ? (data.categories || []) : [],
-  items: (data.items || []).filter(item => {
-    const t = String(item.type ?? '');
-    return allowedTypes.has(t);
-  }),
-};
+    // Collect all IDs to exclude (system folders + all descendants)
+    const excludedIds = new Set();
+
+    function markExcluded(catId) {
+      excludedIds.add(catId);
+      for (const cid of (tempChildren[catId] || [])) markExcluded(cid);
+    }
+
+    for (const cat of categories) {
+      const id = cat.cat_id || cat.category_id || cat.id;
+      const pt = String(cat.preferred_type ?? '').toLowerCase();
+      if (SYSTEM_FOLDER_TYPES.has(pt)) markExcluded(id);
+    }
+
+    categories = categories.filter(cat => {
+      const id = cat.cat_id || cat.category_id || cat.id;
+      return !excludedIds.has(id);
+    });
+    items = items.filter(item => !excludedIds.has(item.parent_id));
+  }
+
+  // ── Step 2: type filter ────────────────────────────────────
+  if (parseFilterKeys.size > 0) {
+    const allowedTypes = new Set();
+    for (const key of parseFilterKeys) {
+      for (const t of (PARSE_KEY_TO_TYPES[key] || [])) allowedTypes.add(String(t));
+    }
+    const keepCategories = parseFilterKeys.has('category');
+    categories = keepCategories ? categories : [];
+    items = items.filter(item => allowedTypes.has(String(item.type ?? '')));
+  }
+
+  return { ...data, categories, items };
 }
 
 // ============================================================
@@ -1346,8 +1391,8 @@ try {
     await new Promise(r => setTimeout(r, 20));
     const parser = new LLSDBinaryParser(decompressed.buffer);
     data = parser.parse();
-    // Apply parse filter
-    if (parseFilterKeys.size > 0) data = applyParseFilter(data);
+    // Apply parse filter (type filter + system folder exclusion)
+    data = applyParseFilter(data);
   } else if (name.endsWith('.json')) {
     setProgress('Parsing JSON…', '', 55);
     await new Promise(r => setTimeout(r, 20));
@@ -1567,6 +1612,7 @@ document.getElementById('pm-clear-all').addEventListener('click', () => {
   document.querySelectorAll('#parse-modal-box .fchip').forEach(c => c.classList.remove('on'));
 });
 document.getElementById('pm-confirm').addEventListener('click', async () => {
+  excludeSystemFolders = document.getElementById('pm-exclude-system').checked;
   hideParseModal();
   if (pendingFile) await doLoadFile(pendingFile);
   pendingFile = null;

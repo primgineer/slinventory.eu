@@ -221,6 +221,14 @@
         <div class="pm-group-label">Wearables</div>
         <div class="pm-chips" id="pm-chips-wearables"></div>
       </div>
+      <div class="pm-divider"></div>
+      <label class="pm-checkbox-row" title="Excludes system folders like Textures, Sounds, Clothing, Body Parts, etc. and all their contents">
+        <input type="checkbox" id="pm-exclude-system">
+        <span class="pm-checkbox-label">
+          Exclude system folders
+          <span class="pm-checkbox-hint">— strips Textures, Sounds, Clothing, Body Parts, Trash and similar built-in folders and all their contents</span>
+        </span>
+      </label>
       <div class="pm-footer">
         <button class="btn" id="pm-select-all">Select All</button>
         <button class="btn" id="pm-clear-all">Clear All</button>
@@ -270,7 +278,17 @@
 </script>
 
 <style>
-/* Status bar center links */
+.pm-divider { height: 1px; background: var(--border); margin: 4px 0; }
+.pm-checkbox-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  cursor: pointer; padding: 6px 2px;
+}
+.pm-checkbox-row input[type="checkbox"] {
+  margin-top: 2px; flex-shrink: 0; accent-color: var(--accent);
+  width: 14px; height: 14px; cursor: pointer;
+}
+.pm-checkbox-label { font-size: 12px; color: var(--text); line-height: 1.4; }
+.pm-checkbox-hint { display: block; font-size: 11px; color: var(--text-mute); margin-top: 2px; }
 .s-center {
   position: absolute; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 6px;
