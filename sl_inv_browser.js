@@ -1348,6 +1348,116 @@ function applyParseFilter(data) {
 }
 
 // ============================================================
+// Session persistence — IndexedDB
+// ============================================================
+const SessionDB = (() => {
+  const DB_NAME    = 'sl_inv_browser';
+  const DB_VERSION = 1;
+  const STORE      = 'session';
+  const KEY        = 'last';
+
+  function open() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = e => {
+        e.target.result.createObjectStore(STORE);
+      };
+      req.onsuccess = e => resolve(e.target.result);
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  async function save(filename, arrayBuffer, parseFilterSnapshot, excludeSystem) {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx    = db.transaction(STORE, 'readwrite');
+      const store = tx.objectStore(STORE);
+      const req   = store.put({
+        filename,
+        buffer:        arrayBuffer,
+        savedAt:       Date.now(),
+        parseFilter:   [...parseFilterSnapshot],
+        excludeSystem,
+      }, KEY);
+      req.onsuccess = () => resolve();
+      req.onerror   = e  => reject(e.target.error);
+    });
+  }
+
+  async function load() {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx    = db.transaction(STORE, 'readonly');
+      const store = tx.objectStore(STORE);
+      const req   = store.get(KEY);
+      req.onsuccess = e => resolve(e.target.result || null);
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  async function clear() {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx    = db.transaction(STORE, 'readwrite');
+      const store = tx.objectStore(STORE);
+      const req   = store.delete(KEY);
+      req.onsuccess = () => resolve();
+      req.onerror   = e  => reject(e.target.error);
+    });
+  }
+
+  return { save, load, clear };
+})();
+
+function formatTimeAgo(ts) {
+  const diff = Date.now() - ts;
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins < 1)   return 'just now';
+  if (mins < 60)  return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+async function checkResumeBanner() {
+  try {
+    const session = await SessionDB.load();
+    if (!session) return;
+
+    const banner = document.getElementById('resume-banner');
+    const label  = document.getElementById('resume-label');
+    const mb     = (session.buffer.byteLength / 1024 / 1024).toFixed(1);
+    label.textContent =
+      `Resume: ${session.filename}  (${mb} MB · saved ${formatTimeAgo(session.savedAt)})`;
+    banner.classList.remove('hidden');
+  } catch (err) {
+    console.warn('SessionDB read error:', err);
+  }
+}
+
+async function resumeSession() {
+  try {
+    const session = await SessionDB.load();
+    if (!session) return;
+
+    document.getElementById('resume-banner').classList.add('hidden');
+
+    // Restore parse filter state from the saved snapshot
+    parseFilterKeys     = new Set(session.parseFilter || []);
+    excludeSystemFolders = session.excludeSystem || false;
+
+    // Feed the saved ArrayBuffer through the same parse path as a fresh .gz
+    const file = new File([session.buffer], session.filename, { type: 'application/gzip' });
+    await doLoadFile(file);
+  } catch (err) {
+    console.warn('Resume failed:', err);
+    await SessionDB.clear();
+    document.getElementById('resume-banner').classList.add('hidden');
+  }
+}
+
+// ============================================================
 // File loading
 // ============================================================
 function setProgress(label, sub, pct) {
@@ -1393,6 +1503,9 @@ try {
     data = parser.parse();
     // Apply parse filter (type filter + system folder exclusion)
     data = applyParseFilter(data);
+    // Persist the raw .gz to IndexedDB for resume on next load
+    SessionDB.save(file.name, arrayBuffer, parseFilterKeys, excludeSystemFolders)
+      .catch(err => console.warn('SessionDB save failed:', err));
   } else if (name.endsWith('.json')) {
     setProgress('Parsing JSON…', '', 55);
     await new Promise(r => setTimeout(r, 20));
@@ -1520,6 +1633,14 @@ document.addEventListener('DOMContentLoaded', () => {
 initDrop();
 initResizer('resizer', 'tree-panel');
 initResizer('resizer2', 'detail-panel');
+
+// Check for a saved session and show resume banner if found
+checkResumeBanner();
+document.getElementById('resume-btn-yes').addEventListener('click', () => resumeSession());
+document.getElementById('resume-btn-no').addEventListener('click', async () => {
+  await SessionDB.clear();
+  document.getElementById('resume-banner').classList.add('hidden');
+});
 
 document.getElementById('btn-view-list').addEventListener('click', () => {
   viewMode = 'list';
