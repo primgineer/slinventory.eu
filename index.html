@@ -49,6 +49,12 @@
       </button>
       <button class="btn" id="btn-expand-all" title="Expand all folders">⊞ Expand</button>
       <button class="btn" id="btn-collapse-all" title="Collapse all">⊟ Collapse</button>
+      <!-- Font size picker -->
+      <div class="view-toggle" id="font-size-toggle" title="Font size">
+        <button class="view-btn active" id="btn-font-small"  title="Small (default)" data-font="small" ><span style="font-size:10px;font-weight:700;letter-spacing:-0.5px">A</span></button>
+        <button class="view-btn"        id="btn-font-medium" title="Medium"           data-font="medium"><span style="font-size:12px;font-weight:700;letter-spacing:-0.5px">A</span></button>
+        <button class="view-btn"        id="btn-font-large"  title="Large"            data-font="large" ><span style="font-size:14px;font-weight:700;letter-spacing:-0.5px">A</span></button>
+      </div>
       <!-- Theme switcher -->
       <div class="view-toggle" id="theme-toggle" title="Switch theme">
         <button class="view-btn active" id="btn-theme-dark" title="Dark theme">🌑</button>
@@ -284,9 +290,58 @@
     document.getElementById('btn-theme-pink').addEventListener('click', () => applyTheme('pink'));
   });
 })();
+
+// ── Font size picker ─────────────────────────────────────────
+(function() {
+  const SIZES = ['small', 'medium', 'large'];
+
+  function applyFontSize(size) {
+    if (!SIZES.includes(size)) size = 'small';
+    document.documentElement.dataset.font = size;
+    localStorage.setItem('sl_inv_font', size);
+    document.querySelectorAll('#font-size-toggle .view-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.font === size);
+    });
+  }
+
+  // Apply immediately to avoid flash
+  applyFontSize(localStorage.getItem('sl_inv_font') || 'small');
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('#font-size-toggle .view-btn').forEach(btn => {
+      btn.addEventListener('click', () => applyFontSize(btn.dataset.font));
+    });
+  });
+})();
 </script>
 
 <style>
+/* ── Font size scaling ── */
+/* default (small) = 13px base, already set in sl_inv_browser.css */
+html[data-font="medium"] { font-size: 14px; }
+html[data-font="medium"] .tree-node-label          { font-size: 13px; }
+html[data-font="medium"] .list-row                 { height: 30px; }
+html[data-font="medium"] .icon-label               { font-size: 12px; }
+html[data-font="medium"] #detail-side-header .ds-name { font-size: 15px; }
+html[data-font="medium"] #detail-side-header .ds-type { font-size: 12px; }
+html[data-font="medium"] .detail-group .dg-label   { font-size: 11px; }
+html[data-font="medium"] .detail-group .dg-value   { font-size: 13px; }
+html[data-font="medium"] .detail-group .dg-value.uuid { font-size: 11px; }
+html[data-font="medium"] .detail-group .dg-value.count { font-size: 16px; }
+html[data-font="medium"] .perm-tag                 { font-size: 11px; }
+
+html[data-font="large"]  { font-size: 15px; }
+html[data-font="large"]  .tree-node-label          { font-size: 14px; }
+html[data-font="large"]  .list-row                 { height: 34px; }
+html[data-font="large"]  .icon-label               { font-size: 13px; }
+html[data-font="large"]  #detail-side-header .ds-name { font-size: 16px; }
+html[data-font="large"]  #detail-side-header .ds-type { font-size: 13px; }
+html[data-font="large"]  .detail-group .dg-label   { font-size: 12px; }
+html[data-font="large"]  .detail-group .dg-value   { font-size: 14px; }
+html[data-font="large"]  .detail-group .dg-value.uuid { font-size: 12px; }
+html[data-font="large"]  .detail-group .dg-value.count { font-size: 17px; }
+html[data-font="large"]  .perm-tag                 { font-size: 12px; }
+
 /* ── Resume banner ── */
 #resume-banner {
   display: flex; align-items: center; justify-content: space-between;
