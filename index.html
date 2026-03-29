@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SL Inventory Browser</title>
+
+<!-- Theme: swap this line to change theme -->
+<!-- Options: theme-dark.css | theme-pink.css -->
+<link rel="stylesheet" href="theme-dark.css" id="theme-stylesheet">
+
+<!-- Base styles -->
+<link rel="stylesheet" href="sl_inv_browser.css">
+
+<!-- Pako (gzip decompression) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Header -->
+  <div id="header">
+    <h1>SL Inventory <span>Browser</span></h1>
+    <div id="search-wrap">
+      <span id="search-icon">⌕</span>
+      <input id="search" type="text" placeholder="Search… (a+b finds both)" autocomplete="off" spellcheck="false">
+      <button id="search-clear" title="Clear search">✕</button>
+      <button id="btn-regex" title="Toggle regular expression mode (.*)">&nbsp;.*&nbsp;</button>
+    </div>
+    <div class="toolbar">
+      <div class="view-toggle">
+        <button class="view-btn active" id="btn-view-list" title="Details view">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="2" width="12" height="2" rx="1"/><rect x="1" y="6" width="12" height="2" rx="1"/><rect x="1" y="10" width="12" height="2" rx="1"/></svg>
+        </button>
+        <button class="view-btn" id="btn-view-icons" title="Icons view">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><rect x="1" y="1" width="5" height="5" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1"/><rect x="1" y="8" width="5" height="5" rx="1"/><rect x="8" y="8" width="5" height="5" rx="1"/></svg>
+        </button>
+      </div>
+      <div id="size-slider-wrap" class="size-slider-wrap hidden" title="Icon size">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="var(--text-mute)"><rect x="1" y="4" width="4" height="4" rx="0.8"/><rect x="7" y="2" width="4" height="4" rx="0.8" opacity=".5"/></svg>
+        <input type="range" id="icon-size-slider" min="60" max="220" value="100" step="10" title="Icon size">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="var(--text-mute)"><rect x="1" y="3" width="6" height="6" rx="1"/><rect x="8" y="1" width="5" height="5" rx="1" opacity=".5"/></svg>
+      </div>
+      <button class="btn" id="btn-filter" title="Filter by type">
+        <span id="filter-badge"></span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M1 2h10l-4 5v3l-2-1V7L1 2z"/></svg>
+        Filter
+      </button>
+      <button class="btn" id="btn-expand-all" title="Expand all folders">⊞ Expand</button>
+      <button class="btn" id="btn-collapse-all" title="Collapse all">⊟ Collapse</button>
+      <!-- Theme switcher -->
+      <div class="view-toggle" id="theme-toggle" title="Switch theme">
+        <button class="view-btn active" id="btn-theme-dark" title="Dark theme">🌑</button>
+        <button class="view-btn" id="btn-theme-pink" title="Pink theme">🌸</button>
+      </div>
+      <button class="btn primary" id="btn-load">⬆ Load File</button>
+      <input type="file" id="file-input" accept=".gz,.json,.llsd" style="display:none">
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div id="filter-bar">
+    <div id="filter-inner"><!-- populated by JS --></div>
+  </div>
+
+  <!-- Main -->
+  <div id="main" style="position:relative;">
+
+    <!-- Drop zone -->
+    <div id="drop-zone">
+      <div class="dz-inner">
+        <div style="font-size:48px; opacity:0.3;">🗂</div>
+        <div class="dz-title">Drop your inventory file</div>
+        <div class="dz-sub">Drag & drop or click <strong>Load File</strong> above<br>Files are processed entirely in browser.
+			<br><br>Viewer cache locations: <br>
+			Windows, Official viewer: %localappdata%\SecondLife <br>
+			Windows, Firestorm viewer: %localappdata%\Firestorm_x64 <br>
+			Windows, Firestorm OpenGrid viewer: %localappdata%\FirestormOS_x64 <br>
+			Linux, Firestorm: ~/.firestorm_x64/cache <br>
+			<br>
+			Find your location in the settings:<br>
+			1. Open Preferences (Ctrl+P) -> [Network & Files]<br>
+			2. Click the Open button next to "Cache Location"<br>
+			<br>
+			The naming schema of the inventory is {YOUR_AVATAR_UUID}.inv.llsd.gz<br>
+		</div>
+        <div class="dz-formats">
+          <span class="fmt-tag">.inv.llsd.gz</span>
+          <span class="fmt-tag">.inv.json</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div id="progress" class="hidden">
+      <div class="p-label" id="p-label">Processing…</div>
+      <div class="p-sub" id="p-sub">Please wait</div>
+      <div class="progress-bar"><div class="progress-fill" id="p-fill" style="width:0%"></div></div>
+    </div>
+
+    <!-- Tree panel -->
+    <div id="tree-panel">
+      <div id="tree-header">
+        <span class="label">Folders</span>
+        <span class="count" id="tree-count">—</span>
+      </div>
+      <div id="tree-scroll"></div>
+    </div>
+
+    <!-- Resizer -->
+    <div id="resizer"></div>
+
+    <!-- Detail panel (center) -->
+    <div id="detail-panel">
+      <div id="breadcrumb"></div>
+      <div id="col-header">
+        <div class="col-h sorted" data-sort="name" id="sort-name">Name <span class="sort-arrow">↑</span></div>
+        <div class="col-h" data-sort="type" id="sort-type">Type</div>
+        <div class="col-h" data-sort="date" id="sort-date">Modified</div>
+        <div class="col-h" data-sort="count" id="sort-count">Items</div>
+      </div>
+      <div id="content-list">
+        <div class="empty-state">
+          <div class="es-icon">📂</div>
+          <div class="es-text">Load a file to begin browsing</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resizer 2 -->
+    <div id="resizer2"></div>
+
+    <!-- Texture lightbox -->
+    <div id="lightbox" class="hidden">
+      <div id="lightbox-bg"></div>
+      <div id="lightbox-inner">
+        <img id="lightbox-img" alt="">
+        <div id="lightbox-name"></div>
+        <div id="lightbox-close" title="Close (ESC)">✕</div>
+      </div>
+    </div>
+
+    <!-- Detail side pane -->
+    <div id="detail-side" class="hidden">
+      <div id="detail-side-header">
+        <div class="ds-icon" id="ds-icon"></div>
+        <div class="ds-name" id="ds-name">—</div>
+        <div class="ds-type" id="ds-type">—</div>
+      </div>
+      <div id="detail-side-body"></div>
+    </div>
+
+  </div>
+
+  <!-- Status bar -->
+  <div id="status">
+    <span id="status-path" class="s-accent">No file loaded</span>
+    <span id="status-items"></span>
+    <span id="status-cats"></span>
+    <span class="s-right">
+      <span id="status-sel"></span>
+      <span id="status-filter"></span>
+    </span>
+  </div>
+
+  <!-- Parse filter modal (shown when .gz is loaded) -->
+  <div id="parse-modal" class="hidden">
+    <div id="parse-modal-bg"></div>
+    <div id="parse-modal-box">
+      <h2>Choose what to load</h2>
+      <div class="pm-sub">Select which types to include. Unselected types will be skipped — useful for large files if you only need specific content.</div>
+      <div class="pm-group">
+        <div class="pm-group-label">Structure</div>
+        <div class="pm-chips" id="pm-chips-structure"></div>
+      </div>
+      <div class="pm-group">
+        <div class="pm-group-label">Content</div>
+        <div class="pm-chips" id="pm-chips-content"></div>
+      </div>
+      <div class="pm-group">
+        <div class="pm-group-label">Wearables</div>
+        <div class="pm-chips" id="pm-chips-wearables"></div>
+      </div>
+      <div class="pm-footer">
+        <button class="btn" id="pm-select-all">Select All</button>
+        <button class="btn" id="pm-clear-all">Clear All</button>
+        <button class="btn primary" id="pm-confirm">Load →</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- #app -->
+
+<script src="sl_inv_browser.js"></script>
+
+<script>
+// ── Theme switcher ───────────────────────────────────────────
+(function() {
+  const themes = {
+    dark: 'theme-dark.css',
+    pink: 'theme-pink.css',
+  };
+  const saved = localStorage.getItem('sl_inv_theme') || 'dark';
+  const sheet = document.getElementById('theme-stylesheet');
+
+  function applyTheme(name) {
+    sheet.href = themes[name] || themes.dark;
+    localStorage.setItem('sl_inv_theme', name);
+    document.querySelectorAll('#theme-toggle .view-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById('btn-theme-' + name);
+    if (btn) btn.classList.add('active');
+  }
+
+  applyTheme(saved);
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('btn-theme-dark').addEventListener('click', () => applyTheme('dark'));
+    document.getElementById('btn-theme-pink').addEventListener('click', () => applyTheme('pink'));
+  });
+})();
+</script>
+
+</body>
+</html>

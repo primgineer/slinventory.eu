@@ -1,0 +1,52 @@
+/* ============================================================
+   SL Inventory Browser — Pink Theme
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap');
+
+:root {
+  /* Backgrounds — warm dark rose */
+  --bg:        #12090e;
+  --bg1:       #1a0d13;
+  --bg2:       #221219;
+  --bg3:       #2b1820;
+
+  /* Borders */
+  --border:    #3a1f2a;
+  --border2:   #4e2938;
+
+  /* Text */
+  --text:      #f0d6e0;
+  --text-dim:  #8a5a6e;
+  --text-mute: #5a2e3e;
+
+  /* Accent (pink/rose) */
+  --accent:      #ff6fa8;
+  --accent2:     #c44a7a;
+  --accent-glow: rgba(255, 111, 168, 0.12);
+
+  /* Status colours */
+  --green:  #3dba7f;
+  --amber:  #e8a630;
+  --red:    #e85555;
+  --purple: #c97aff;
+  --teal:   #2dbdba;
+
+  /* Selection */
+  --selected: rgba(255, 111, 168, 0.10);
+  --hover:    rgba(255, 111, 168, 0.06);
+
+  /* Layout */
+  --row-h:    26px;
+  --sidebar:  320px;
+  --header-h: 48px;
+  --status-h: 28px;
+
+  /* Icon grid */
+  --icon-sz:   100px;
+  --icon-sz-h: 80px;
+}
+
+@media (max-width: 700px) {
+  :root { --sidebar: 220px; }
+}

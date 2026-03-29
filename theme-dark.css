@@ -1,0 +1,52 @@
+/* ============================================================
+   SL Inventory Browser — Dark Theme (default)
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap');
+
+:root {
+  /* Backgrounds */
+  --bg:        #0d0f12;
+  --bg1:       #12151a;
+  --bg2:       #181c23;
+  --bg3:       #1e2430;
+
+  /* Borders */
+  --border:    #252d3a;
+  --border2:   #2e3a4e;
+
+  /* Text */
+  --text:      #c8d4e3;
+  --text-dim:  #5a6a80;
+  --text-mute: #3a4a5e;
+
+  /* Accent (blue) */
+  --accent:      #4a9eff;
+  --accent2:     #2d6dbf;
+  --accent-glow: rgba(74, 158, 255, 0.12);
+
+  /* Status colours */
+  --green:  #3dba7f;
+  --amber:  #e8a630;
+  --red:    #e85555;
+  --purple: #9b6dff;
+  --teal:   #2dbdba;
+
+  /* Selection */
+  --selected: rgba(74, 158, 255, 0.10);
+  --hover:    rgba(74, 158, 255, 0.06);
+
+  /* Layout */
+  --row-h:    26px;
+  --sidebar:  320px;
+  --header-h: 48px;
+  --status-h: 28px;
+
+  /* Icon grid */
+  --icon-sz:   100px;
+  --icon-sz-h: 80px;
+}
+
+@media (max-width: 700px) {
+  :root { --sidebar: 220px; }
+}
