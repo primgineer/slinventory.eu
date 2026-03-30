@@ -22,6 +22,7 @@
   <!-- Header -->
   <div id="header">
     <h1>SL Inventory <span>Browser</span></h1>
+    <button class="btn" id="btn-kbd" title="Keyboard shortcuts">?</button>
     <div id="search-wrap">
       <span id="search-icon">⌕</span>
       <input id="search" type="text" placeholder="Search… (a+b finds both)" autocomplete="off" spellcheck="false">
@@ -193,12 +194,23 @@
     <!-- Resizer 2 -->
     <div id="resizer2"></div>
 
+    <!-- Detail pane resizer (between content and detail) -->
+    <div id="resizer3"></div>
+
+    <!-- Detail pane collapse toggle -->
+    <div id="btn-toggle-detail" title="Toggle detail pane (D)">‹</div>
+
     <!-- Texture lightbox -->
     <div id="lightbox" class="hidden">
       <div id="lightbox-bg"></div>
       <div id="lightbox-inner">
+        <button id="lb-prev" class="lb-nav" title="Previous (←)">‹</button>
         <img id="lightbox-img" alt="">
-        <div id="lightbox-name"></div>
+        <button id="lb-next" class="lb-nav" title="Next (→)">›</button>
+        <div id="lightbox-footer">
+          <div id="lightbox-name"></div>
+          <div id="lb-counter"></div>
+        </div>
         <div id="lightbox-close" title="Close (ESC)">✕</div>
       </div>
     </div>
@@ -240,30 +252,56 @@
     <div id="parse-modal-box">
       <h2>Choose what to load</h2>
       <div class="pm-sub">Select which types to include. Unselected types will be skipped — useful for large files if you only need specific content.</div>
-      <div class="pm-group">
-        <div class="pm-group-label">Structure</div>
-        <div class="pm-chips" id="pm-chips-structure"></div>
+      <!-- Advanced toggle -->
+      <button class="pm-advanced-toggle" id="pm-advanced-toggle">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M2 3l3 4 3-4"/></svg>
+        Advanced options
+      </button>
+      <div id="pm-advanced" class="hidden">
+        <div class="pm-group">
+          <div class="pm-group-label">Structure</div>
+          <div class="pm-chips" id="pm-chips-structure"></div>
+        </div>
+        <div class="pm-group">
+          <div class="pm-group-label">Content</div>
+          <div class="pm-chips" id="pm-chips-content"></div>
+        </div>
+        <div class="pm-group">
+          <div class="pm-group-label">Wearables</div>
+          <div class="pm-chips" id="pm-chips-wearables"></div>
+        </div>
+        <div class="pm-divider"></div>
+        <label class="pm-checkbox-row" title="Excludes system folders like Textures, Sounds, Clothing, Body Parts, etc. and all their contents">
+          <input type="checkbox" id="pm-exclude-system">
+          <span class="pm-checkbox-label">
+            Exclude system folders
+            <span class="pm-checkbox-hint">— strips Textures, Sounds, Clothing, Body Parts, Trash and similar built-in folders and all their contents</span>
+          </span>
+        </label>
       </div>
-      <div class="pm-group">
-        <div class="pm-group-label">Content</div>
-        <div class="pm-chips" id="pm-chips-content"></div>
-      </div>
-      <div class="pm-group">
-        <div class="pm-group-label">Wearables</div>
-        <div class="pm-chips" id="pm-chips-wearables"></div>
-      </div>
-      <div class="pm-divider"></div>
-      <label class="pm-checkbox-row" title="Excludes system folders like Textures, Sounds, Clothing, Body Parts, etc. and all their contents">
-        <input type="checkbox" id="pm-exclude-system">
-        <span class="pm-checkbox-label">
-          Exclude system folders
-          <span class="pm-checkbox-hint">— strips Textures, Sounds, Clothing, Body Parts, Trash and similar built-in folders and all their contents</span>
-        </span>
-      </label>
       <div class="pm-footer">
         <button class="btn" id="pm-select-all">Select All</button>
         <button class="btn" id="pm-clear-all">Clear All</button>
         <button class="btn primary" id="pm-confirm">Load →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard shortcut overlay -->
+  <div id="kbd-overlay" class="hidden">
+    <div id="kbd-overlay-bg"></div>
+    <div id="kbd-box">
+      <h3>Keyboard Shortcuts</h3>
+      <div class="kbd-grid">
+        <div class="kbd-row"><span class="kbd-desc">Navigate up</span><span class="kbd-keys"><kbd>Backspace</kbd></span></div>
+        <div class="kbd-row"><span class="kbd-desc">Move selection</span><span class="kbd-keys"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></span></div>
+        <div class="kbd-row"><span class="kbd-desc">Open folder / preview</span><span class="kbd-keys"><kbd>Enter</kbd></span></div>
+        <div class="kbd-row"><span class="kbd-desc">Open folder / preview</span><span class="kbd-keys"><kbd>Space</kbd></span></div>
+        <div class="kbd-row"><span class="kbd-desc">Close modal / lightbox</span><span class="kbd-keys"><kbd>Esc</kbd></span></div>
+        <div class="kbd-row"><span class="kbd-desc">Prev / next texture</span><span class="kbd-keys"><kbd>←</kbd><kbd>→</kbd></span></div>
+        <div class="kbd-row"><span class="kbd-desc">Focus search</span><span class="kbd-keys"><kbd>/</kbd></span></div>
+        <div class="kbd-row"><span class="kbd-desc">Toggle detail pane</span><span class="kbd-keys"><kbd>D</kbd></span></div>
+        <div class="kbd-row"><span class="kbd-desc">This help</span><span class="kbd-keys"><kbd>?</kbd></span></div>
       </div>
     </div>
   </div>
@@ -338,6 +376,23 @@
     document.addEventListener('click', () => dropdown.classList.add('hidden'));
   });
 })();
+
+// ── Advanced parse modal toggle ──────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const tog = document.getElementById('pm-advanced-toggle');
+  const adv = document.getElementById('pm-advanced');
+  if (tog && adv) {
+    tog.addEventListener('click', () => {
+      const hidden = adv.classList.toggle('hidden');
+      tog.classList.toggle('open', !hidden);
+    });
+  }
+
+  // Keyboard shortcut overlay
+  const kbdOverlay = document.getElementById('kbd-overlay');
+  document.getElementById('btn-kbd').addEventListener('click', () => kbdOverlay.classList.toggle('hidden'));
+  document.getElementById('kbd-overlay-bg').addEventListener('click', () => kbdOverlay.classList.add('hidden'));
+});
 
 // ── Font size picker ─────────────────────────────────────────
 (function() {
@@ -414,6 +469,23 @@ html[data-font="large"]  .detail-group .dg-value   { font-size: 14px; }
 html[data-font="large"]  .detail-group .dg-value.uuid { font-size: 12px; }
 html[data-font="large"]  .detail-group .dg-value.count { font-size: 17px; }
 html[data-font="large"]  .perm-tag                 { font-size: 12px; }
+
+/* ── Misc new elements ── */
+#btn-kbd {
+  padding: 4px 9px; font-size: 13px; font-weight: 700;
+  border-radius: 50%; width: 28px; height: 28px; justify-content: center;
+  flex-shrink: 0;
+}
+.pm-advanced-toggle {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-mute);
+  background: none; border: none; padding: 4px 0; transition: color .15s;
+}
+.pm-advanced-toggle:hover { color: var(--accent); }
+.pm-advanced-toggle svg { transition: transform .2s; }
+.pm-advanced-toggle.open svg { transform: rotate(180deg); }
+#pm-advanced { display: flex; flex-direction: column; gap: 10px; }
+#pm-advanced.hidden { display: none; }
 
 /* ── Resume banner ── */
 #resume-banner {

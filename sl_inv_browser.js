@@ -1,3 +1,4 @@
+
 // ============================================================
 // LLSD Binary Parser (JS port)
 // ============================================================
@@ -185,16 +186,45 @@ link:         `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path
 unknown:      `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="#5a6a80" stroke-width="1.2"/><text x="8" y="11" text-anchor="middle" font-family="monospace" font-size="8" fill="#5a6a80">?</text></svg>`,
 };
 
-function getIconForCategory(folderType) {
-const t = parseInt(folderType);
-const map = {
-  0:'texture', 1:'sound', 2:'calling_card', 3:'landmark',
-  5:'clothing', 6:'object', 7:'notecard', 10:'script',
-  13:'bodypart', 14:'trash', 15:'snapshot', 16:'lost_found',
-  20:'animation', 21:'gesture', 45:'link', 46:'link',
-  50:'mesh', 56:'settings', 57:'settings',
+// String preferred_type → icon key
+const FOLDER_TYPE_STR_MAP = {
+  'texture':'texture',     'textures':'texture',
+  'sound':'sound',         'sounds':'sound',
+  'calling_card':'calling_card', 'callcard':'calling_card',
+  'landmark':'landmark',   'landmarks':'landmark',
+  'clothing':'clothing',
+  'object':'object',       'objects':'object',
+  'notecard':'notecard',   'notecards':'notecard',
+  'lsltext':'script',      'script':'script',      'scripts':'script',
+  'bodypart':'bodypart',   'body_part':'bodypart',
+  'trash':'trash',
+  'snapshot':'snapshot',   'snapshots':'snapshot',
+  'lstndfnd':'lost_found', 'lost_and_found':'lost_found',
+  'animation':'animation', 'animations':'animation',
+  'gesture':'gesture',     'gestures':'gesture',
+  'link':'link',
+  'mesh':'mesh',           'meshes':'mesh',
+  'settings':'settings',   'material':'settings',
+  'inbox':'notecard',
+  'favorite':'landmark',   'favorites':'landmark',
+  'my_otfts':'clothing',   'current':'clothing',
 };
-return ICONS[map[t] || 'folder'];
+
+function getIconForCategory(folderType) {
+  // Handle string preferred_type (e.g. "texture", "clothing", "lsltext")
+  if (typeof folderType === 'string' && isNaN(parseInt(folderType))) {
+    const key = FOLDER_TYPE_STR_MAP[folderType.toLowerCase()];
+    return ICONS[key || 'folder'];
+  }
+  const t = parseInt(folderType);
+  const map = {
+    0:'texture', 1:'sound', 2:'calling_card', 3:'landmark',
+    5:'clothing', 6:'object', 7:'notecard', 10:'script',
+    13:'bodypart', 14:'trash', 15:'snapshot', 16:'lost_found',
+    20:'animation', 21:'gesture', 45:'link', 46:'link',
+    50:'mesh', 56:'settings', 57:'settings',
+  };
+  return ICONS[map[t] || 'folder'];
 }
 
 function getIconForItem(assetType) {
@@ -235,7 +265,9 @@ let sortKey = 'name';
 let sortAsc = true;
 let searchQuery = '';
 let expandedNodes = new Set();
-let viewMode = 'list'; // 'list' | 'icons'
+// DEFAULT_VIEW: change 'icons' to 'list' to flip the default
+const DEFAULT_VIEW = 'icons';
+let viewMode = DEFAULT_VIEW;
 let iconSize = 100;
 // activeTypeFilter: Set of canonical type keys (strings like 'texture','sound',…,'folder')
 // Empty set = no filter = show all
@@ -421,18 +453,77 @@ return stack;
 function renderBreadcrumb() {
 const bc = document.getElementById('breadcrumb');
 bc.innerHTML = '';
-navStack.forEach((item, i) => {
-  if (i > 0) {
-    const sep = document.createElement('span');
-    sep.className = 'bc-sep'; sep.textContent = '›';
-    bc.appendChild(sep);
-  }
-  const el = document.createElement('span');
-  el.className = 'bc-item' + (i === navStack.length - 1 ? ' current' : '');
-  el.textContent = item.name;
-  if (i < navStack.length - 1) el.addEventListener('click', () => navigateTo(item.id));
-  bc.appendChild(el);
-});
+if (!navStack.length) return;
+
+const MAX_VISIBLE = 7; // show at most this many segments before collapsing
+const stack = navStack;
+const last = stack.length - 1;
+
+// Determine which indices to show
+let indices;
+if (stack.length <= MAX_VISIBLE + 1) {
+  indices = stack.map((_, i) => i);
+} else {
+  // Always show first, last two, collapse the middle
+  indices = null; // signal to use collapsed mode
+}
+
+if (indices) {
+  // All fit — render normally
+  indices.forEach(i => {
+    if (i > 0) { const s = document.createElement('span'); s.className='bc-sep'; s.textContent='›'; bc.appendChild(s); }
+    const el = document.createElement('span');
+    el.className = 'bc-item' + (i === last ? ' current' : '');
+    el.textContent = stack[i].name;
+    if (i < last) el.addEventListener('click', () => navigateTo(stack[i].id));
+    bc.appendChild(el);
+  });
+} else {
+  // Collapsed: first › ›› › second-to-last › last
+  const renderItem = (i) => {
+    const el = document.createElement('span');
+    el.className = 'bc-item' + (i === last ? ' current' : '');
+    el.textContent = stack[i].name;
+    if (i < last) el.addEventListener('click', () => navigateTo(stack[i].id));
+    return el;
+  };
+  const sep = () => { const s = document.createElement('span'); s.className='bc-sep'; s.textContent='›'; return s; };
+
+  bc.appendChild(renderItem(0));
+  bc.appendChild(sep());
+
+  // Collapsed middle button — shows tooltip of hidden path on hover
+  const collapse = document.createElement('span');
+  collapse.className = 'bc-collapse';
+  collapse.textContent = '••••';
+  const hiddenPath = stack.slice(1, last - 1).map(s => s.name).join(' › ');
+  collapse.title = hiddenPath;
+  // Click expands — navigates to the item just before second-to-last
+  const expandMenu = document.createElement('div');
+  expandMenu.className = 'bc-expand-menu hidden';
+  stack.slice(1, last).forEach((item, ii) => {
+    const opt = document.createElement('div');
+    opt.className = 'bc-expand-opt';
+    opt.textContent = item.name;
+    opt.addEventListener('click', e => { e.stopPropagation(); expandMenu.classList.add('hidden'); navigateTo(item.id); });
+    expandMenu.appendChild(opt);
+  });
+  document.body.appendChild(expandMenu);
+  collapse.addEventListener('click', e => {
+    e.stopPropagation();
+    const r = collapse.getBoundingClientRect();
+    expandMenu.style.top  = (r.bottom + 4) + 'px';
+    expandMenu.style.left = r.left + 'px';
+    expandMenu.classList.toggle('hidden');
+  });
+  document.addEventListener('click', () => expandMenu.classList.add('hidden'), { capture: true });
+  bc.appendChild(collapse);
+
+  bc.appendChild(sep());
+  bc.appendChild(renderItem(last - 1));
+  bc.appendChild(sep());
+  bc.appendChild(renderItem(last));
+}
 }
 
 // Canonical type key for an item, matching the keys used in getIconForItem map
@@ -581,10 +672,30 @@ function escHtml(s) {
 return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+function buildEmptyState() {
+  const hasSearch = searchQuery.length > 0;
+  const hasFilter = activeTypeFilter.size > 0;
+  // Check if there IS content before filtering — to distinguish "truly empty" from "filtered out"
+  const rawFolders = catChildren[currentCatId] || [];
+  const rawItems   = catItems[currentCatId] || [];
+  const hasSomeContent = rawFolders.length > 0 || rawItems.length > 0;
+
+  if (hasSearch && hasFilter)
+    return `<div class="empty-state"><div class="es-icon">🔍</div><div class="es-text">No results for <strong>"${escHtml(searchQuery)}"</strong><br><span style="font-size:11px;opacity:.7">Try clearing the type filter</span></div></div>`;
+  if (hasSearch)
+    return `<div class="empty-state"><div class="es-icon">🔍</div><div class="es-text">No results for <strong>"${escHtml(searchQuery)}"</strong></div></div>`;
+  if (hasFilter && hasSomeContent)
+    return `<div class="empty-state"><div class="es-icon">📭</div><div class="es-text">No items match the active filter</div></div>`;
+  return `<div class="empty-state"><div class="es-icon">📭</div><div class="es-text">This folder is empty</div></div>`;
+}
+
 function renderContentList() {
 const list = document.getElementById('content-list');
 const colHeader = document.getElementById('col-header');
 if (!currentCatId) return;
+
+// Disconnect observer from previous view's cells before replacing DOM
+thumbObserver.disconnect();
 
 const contents = getSortedContents(currentCatId);
 
@@ -680,28 +791,160 @@ for (const cid of (catChildren[catId] || [])) {
 return null;
 }
 
+// Lightbox state — tracks the list of textures in the current view for prev/next
+let lbTextureList  = [];  // [{assetId, name}, ...]
+let lbCurrentIndex = -1;
+
+function buildLightboxList() {
+  // Build ordered list of texture items from current view contents
+  const contents = getSortedContents(currentCatId);
+  lbTextureList = contents
+    .filter(e => !e._isFolder && isTextureType(e.type ?? -1) && itemHasAssetId(e))
+    .map(e => ({ assetId: e.asset_id, name: e.name || '' }));
+}
+
 function openLightbox(assetId, name) {
-const lb = document.getElementById('lightbox');
-const img = document.getElementById('lightbox-img');
-const lbName = document.getElementById('lightbox-name');
-img.src = thumbUrl(assetId).replace('256x192', '512x512'); // ask for bigger size
-// Fallback: if 512 fails, try 256
-img.onerror = () => { img.src = thumbUrl(assetId); img.onerror = null; };
-lbName.textContent = name || '';
-lb.classList.remove('hidden');
+  buildLightboxList();
+  lbCurrentIndex = lbTextureList.findIndex(t => t.assetId === assetId);
+  // If not found in list (e.g. opened from detail pane), add it temporarily
+  if (lbCurrentIndex === -1) {
+    lbTextureList = [{ assetId, name }];
+    lbCurrentIndex = 0;
+  }
+  renderLightbox();
+  document.getElementById('lightbox').classList.remove('hidden');
+}
+
+function renderLightbox() {
+  const entry = lbTextureList[lbCurrentIndex];
+  if (!entry) return;
+  const img   = document.getElementById('lightbox-img');
+  const label = document.getElementById('lightbox-name');
+  img.src = thumbUrl(entry.assetId).replace('256x192', '512x512');
+  img.onerror = () => { img.src = thumbUrl(entry.assetId); img.onerror = null; };
+  label.textContent = entry.name || '';
+  // Show/hide nav arrows
+  const hasPrev = lbCurrentIndex > 0;
+  const hasNext = lbCurrentIndex < lbTextureList.length - 1;
+  document.getElementById('lb-prev').style.display = hasPrev ? 'flex' : 'none';
+  document.getElementById('lb-next').style.display = hasNext ? 'flex' : 'none';
+  // Counter
+  const counter = document.getElementById('lb-counter');
+  if (counter && lbTextureList.length > 1)
+    counter.textContent = `${lbCurrentIndex + 1} / ${lbTextureList.length}`;
+  else if (counter) counter.textContent = '';
+}
+
+function lbNavigate(dir) {
+  const next = lbCurrentIndex + dir;
+  if (next < 0 || next >= lbTextureList.length) return;
+  lbCurrentIndex = next;
+  renderLightbox();
 }
 
 function closeLightbox() {
-const lb = document.getElementById('lightbox');
-lb.classList.add('hidden');
-const img = document.getElementById('lightbox-img');
-img.src = '';
+  document.getElementById('lightbox').classList.add('hidden');
+  document.getElementById('lightbox-img').src = '';
+  lbTextureList  = [];
+  lbCurrentIndex = -1;
 }
 
 function thumbUrl(assetId) {
 return `https://picture-service.secondlife.com/${assetId}/256x192.jpg`;
 }
 
+// ── IntersectionObserver lazy loader ──────────────────────────
+// One shared observer for all thumb cells. When a cell scrolls into
+// view, the observer reads data attributes and triggers the load.
+const thumbObserver = new IntersectionObserver((entries) => {
+  for (const entry of entries) {
+    if (!entry.isIntersecting) continue;
+    const el = entry.target;
+    thumbObserver.unobserve(el); // only load once
+
+    const assetId = el.dataset.lazyAsset;
+    const type    = el.dataset.lazyType; // 'texture' | 'folder'
+
+    if (!assetId) continue;
+
+    if (type === 'texture') {
+      // el is the .thumb-box; img is its <img> child
+      const img     = el.querySelector('img');
+      const spinWrap = el.querySelector('.thumb-icon');
+      if (!img) continue;
+      img.src = thumbUrl(assetId);
+      img.addEventListener('load', () => {
+        img.classList.add('loaded');
+        el.classList.add('img-loaded');
+        thumbCache[assetId] = 'ok';
+        if (spinWrap) spinWrap.style.display = 'none';
+      }, { once: true });
+      img.addEventListener('error', () => {
+        thumbCache[assetId] = 'error';
+        img.style.display = 'none';
+        if (spinWrap) spinWrap.style.display = 'none';
+      }, { once: true });
+
+    } else if (type === 'folder') {
+      // el is the .folder-icon-wrap; SVG <image> is inside
+      const svgImg = el.querySelector('image');
+      if (!svgImg) continue;
+      const url = thumbUrl(assetId);
+      const testImg = new Image();
+      testImg.onload = () => {
+        svgImg.setAttribute('href', url);
+        svgImg.style.opacity = '1';
+        thumbCache[assetId] = 'ok';
+      };
+      testImg.onerror = () => { thumbCache[assetId] = 'error'; };
+      testImg.src = url;
+    }
+  }
+}, {
+  // Start loading slightly before the cell reaches the viewport
+  rootMargin: '200px 0px',
+  threshold: 0,
+});
+
+function observeThumb(el, assetId, type) {
+  if (!assetId) return;
+  // If already cached and successful, skip observer and load directly
+  if (thumbCache[assetId] === 'ok') {
+    // Dispatch a synthetic load by setting the attribute and triggering immediately
+    el.dataset.lazyAsset = assetId;
+    el.dataset.lazyType  = type;
+    // Use a microtask so the element is in the DOM first
+    Promise.resolve().then(() => {
+      const fakeEntry = [{ isIntersecting: true, target: el }];
+      thumbObserver.unobserve(el); // prevent double-observe
+      // Manually trigger the load logic inline
+      if (type === 'texture') {
+        const img = el.querySelector('img');
+        if (img && !img.src) {
+          img.src = thumbUrl(assetId);
+          img.addEventListener('load', () => {
+            img.classList.add('loaded');
+            el.classList.add('img-loaded');
+            const sw = el.querySelector('.thumb-icon');
+            if (sw) sw.style.display = 'none';
+          }, { once: true });
+        }
+      } else if (type === 'folder') {
+        const svgImg = el.querySelector('image');
+        if (svgImg && !svgImg.getAttribute('href')) {
+          svgImg.setAttribute('href', thumbUrl(assetId));
+          svgImg.style.opacity = '1';
+        }
+      }
+    });
+    return;
+  }
+  el.dataset.lazyAsset = assetId;
+  el.dataset.lazyType  = type;
+  thumbObserver.observe(el);
+}
+
+// Keep loadThumb for lightbox (immediate, non-lazy)
 function loadThumb(imgEl, assetId, onLoad) {
 if (!assetId) return;
 imgEl.src = thumbUrl(assetId);
@@ -779,16 +1022,8 @@ if (thumbAssetId) {
 
   wrap.appendChild(svg);
 
-  // Load image — set href once constructed
-  const url = thumbUrl(thumbAssetId);
-  const testImg = new Image();
-  testImg.onload = () => {
-    img.setAttribute('href', url);
-    img.style.opacity = '1';
-    thumbCache[thumbAssetId] = 'ok';
-  };
-  testImg.onerror = () => { thumbCache[thumbAssetId] = 'error'; };
-  testImg.src = url;
+  // Lazy-load: observer will set href when cell enters viewport
+  observeThumb(wrap, thumbAssetId, 'folder');
 
 } else {
   // Plain folder SVG, no thumbnail
@@ -818,7 +1053,7 @@ for (const entry of contents) {
     cell.appendChild(buildFolderThumbCell(entry));
 
   } else if (isTextureType(at) && itemHasAssetId(entry)) {
-    // Texture item: thumbnail in a rounded box with spinner
+    // Texture item: thumbnail — lazy loaded via IntersectionObserver
     const thumbBox = document.createElement('div');
     thumbBox.className = 'thumb-box';
 
@@ -830,10 +1065,9 @@ for (const entry of contents) {
     const img = document.createElement('img');
     img.alt = '';
     thumbBox.appendChild(img);
-    loadThumb(img, entry.asset_id, () => {
-      thumbBox.classList.add('img-loaded');
-      spinWrap.style.display = 'none';
-    });
+
+    // Register for lazy loading — observer sets img.src when visible
+    observeThumb(thumbBox, entry.asset_id, 'texture');
     cell.appendChild(thumbBox);
 
   } else {
@@ -1046,6 +1280,22 @@ if (entry._isFolder) {
       <div class="dg-value uuid">${entry.asset_id || '—'}</div>
     </div>
     ${permSection}
+    ${(() => {
+      const pid = entry.parent_id;
+      if (!pid || !catMap[pid]) return '';
+      const parts = [];
+      let id = pid;
+      while (id && catMap[id]) {
+        parts.unshift(catMap[id].name || '(unnamed)');
+        const p = catMap[id].parent_id;
+        if (!p || p === '00000000-0000-0000-0000-000000000000' || !catMap[p]) break;
+        id = p;
+      }
+      return `<div class="detail-group">
+        <div class="dg-label">Location</div>
+        <div class="dg-value" style="font-size:11px;line-height:1.6;color:var(--text-dim);word-break:break-word">${parts.map(p => escHtml(p)).join('<span style="color:var(--text-mute);margin:0 3px">›</span>')}</div>
+      </div>`;
+    })()}
   `;
 }
 }
@@ -1281,6 +1531,11 @@ for (const group of PARSE_FILTER_GROUPS) {
 
 function showParseModal(file) {
 pendingFile = file;
+// Reset advanced section to collapsed on each show
+const adv = document.getElementById('pm-advanced');
+if (adv) adv.classList.add('hidden');
+const tog = document.getElementById('pm-advanced-toggle');
+if (tog) tog.classList.remove('open');
 document.getElementById('parse-modal').classList.remove('hidden');
 }
 
@@ -1606,6 +1861,50 @@ document.addEventListener('mouseup', () => {
 }
 
 // ============================================================
+// Detail pane resizer + toggle
+// ============================================================
+function initDetailResizer() {
+const resizer = document.getElementById('resizer3');
+const panel   = document.getElementById('detail-side');
+if (!resizer || !panel) return;
+let dragging = false, startX = 0, startW = 0;
+
+resizer.addEventListener('mousedown', e => {
+  dragging = true; startX = e.clientX; startW = panel.offsetWidth;
+  resizer.classList.add('dragging');
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+});
+document.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  // Dragging left = bigger panel; right = smaller
+  const newW = Math.max(160, Math.min(480, startW - (e.clientX - startX)));
+  panel.style.width = newW + 'px';
+});
+document.addEventListener('mouseup', () => {
+  if (!dragging) return;
+  dragging = false;
+  resizer.classList.remove('dragging');
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+});
+}
+
+function toggleDetailPane() {
+const panel   = document.getElementById('detail-side');
+const resizer = document.getElementById('resizer3');
+const btn     = document.getElementById('btn-toggle-detail');
+const isHidden = panel.classList.contains('collapsed');
+panel.classList.toggle('collapsed');
+resizer.classList.toggle('hidden');
+if (btn) {
+  btn.classList.toggle('active', isHidden);
+  btn.textContent = isHidden ? '›' : '‹';
+}
+localStorage.setItem('sl_inv_detail_open', isHidden ? '1' : '0');
+}
+
+// ============================================================
 // Drag & drop
 // ============================================================
 function initDrop() {
@@ -1633,6 +1932,18 @@ document.addEventListener('DOMContentLoaded', () => {
 initDrop();
 initResizer('resizer', 'tree-panel');
 initResizer('resizer2', 'detail-panel');
+initDetailResizer();
+
+// Restore detail pane state
+const detailOpen = localStorage.getItem('sl_inv_detail_open');
+if (detailOpen === '0') {
+  document.getElementById('detail-side').classList.add('collapsed');
+  document.getElementById('resizer3').classList.add('hidden');
+  const btn = document.getElementById('btn-toggle-detail');
+  if (btn) btn.textContent = '›';
+}
+
+document.getElementById('btn-toggle-detail').addEventListener('click', toggleDetailPane);
 
 // Check for a saved session and show resume banner if found
 checkResumeBanner();
@@ -1669,6 +1980,8 @@ document.getElementById('icon-size-slider').addEventListener('input', e => {
 // Lightbox: close on bg click, X button, or ESC
 document.getElementById('lightbox-bg').addEventListener('click', closeLightbox);
 document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
+document.getElementById('lb-prev').addEventListener('click', e => { e.stopPropagation(); lbNavigate(-1); });
+  document.getElementById('lb-next').addEventListener('click', e => { e.stopPropagation(); lbNavigate(+1); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeLightbox();
 
@@ -1681,6 +1994,13 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     if (navStack.length >= 2) navigateTo(navStack[navStack.length - 2].id);
     return;
+  }
+
+  // Lightbox arrow navigation — must be checked BEFORE grid navigation
+  const lb = document.getElementById('lightbox');
+  if (lb && !lb.classList.contains('hidden')) {
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); lbNavigate(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); lbNavigate(+1); return; }
   }
 
   // Arrow keys = move selection in content list
@@ -1723,6 +2043,33 @@ document.addEventListener('keydown', e => {
       }
     }
   }
+
+  // / = focus search box
+  if (e.key === '/' && !inInput) {
+    e.preventDefault();
+    const s = document.getElementById('search');
+    if (s) { s.focus(); s.select(); }
+  }
+
+  // D = toggle detail pane
+  if ((e.key === 'd' || e.key === 'D') && !inInput) {
+    e.preventDefault();
+    toggleDetailPane();
+  }
+
+  // ? = keyboard shortcut overlay
+  if (e.key === '?' && !inInput) {
+    e.preventDefault();
+    const overlay = document.getElementById('kbd-overlay');
+    if (overlay) overlay.classList.toggle('hidden');
+  }
+
+  // Escape = also close kbd overlay and bc expand menus
+  if (e.key === 'Escape') {
+    const overlay = document.getElementById('kbd-overlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
 });
 
 // Parse filter modal
@@ -1819,12 +2166,17 @@ document.querySelectorAll('.col-h').forEach(el => {
 document.querySelectorAll('.col-h:not(#sort-name) .sort-arrow').forEach(el => el.textContent = '');
 
 // Restore persistent settings
-const savedViewMode = localStorage.getItem('sl_inv_viewmode');
+const savedViewMode = localStorage.getItem('sl_inv_viewmode') || DEFAULT_VIEW;
 if (savedViewMode === 'icons') {
   viewMode = 'icons';
   document.getElementById('btn-view-icons').classList.add('active');
   document.getElementById('btn-view-list').classList.remove('active');
   document.getElementById('size-slider-wrap').classList.remove('hidden');
+} else {
+  viewMode = 'list';
+  document.getElementById('btn-view-list').classList.add('active');
+  document.getElementById('btn-view-icons').classList.remove('active');
+  document.getElementById('size-slider-wrap').classList.add('hidden');
 }
 
 const savedIconSize = parseInt(localStorage.getItem('sl_inv_iconsize'));
