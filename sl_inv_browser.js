@@ -1647,6 +1647,7 @@ document.getElementById('btn-view-list').addEventListener('click', () => {
   document.getElementById('btn-view-list').classList.add('active');
   document.getElementById('btn-view-icons').classList.remove('active');
   document.getElementById('size-slider-wrap').classList.add('hidden');
+  localStorage.setItem('sl_inv_viewmode', 'list');
   renderContentList();
 });
 
@@ -1655,11 +1656,13 @@ document.getElementById('btn-view-icons').addEventListener('click', () => {
   document.getElementById('btn-view-icons').classList.add('active');
   document.getElementById('btn-view-list').classList.remove('active');
   document.getElementById('size-slider-wrap').classList.remove('hidden');
+  localStorage.setItem('sl_inv_viewmode', 'icons');
   renderContentList();
 });
 
 document.getElementById('icon-size-slider').addEventListener('input', e => {
   applyIconSize(parseInt(e.target.value));
+  localStorage.setItem('sl_inv_iconsize', e.target.value);
   // No need to re-render — CSS variable change reflowed by browser automatically
 });
 
@@ -1814,4 +1817,19 @@ document.querySelectorAll('.col-h').forEach(el => {
 
 // Remove unused sort arrows initially
 document.querySelectorAll('.col-h:not(#sort-name) .sort-arrow').forEach(el => el.textContent = '');
+
+// Restore persistent settings
+const savedViewMode = localStorage.getItem('sl_inv_viewmode');
+if (savedViewMode === 'icons') {
+  viewMode = 'icons';
+  document.getElementById('btn-view-icons').classList.add('active');
+  document.getElementById('btn-view-list').classList.remove('active');
+  document.getElementById('size-slider-wrap').classList.remove('hidden');
+}
+
+const savedIconSize = parseInt(localStorage.getItem('sl_inv_iconsize'));
+if (!isNaN(savedIconSize)) {
+  applyIconSize(savedIconSize);
+  document.getElementById('icon-size-slider').value = savedIconSize;
+}
 });
