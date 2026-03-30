@@ -748,6 +748,7 @@ for (const entry of contents) {
   frag.appendChild(row);
 }
 list.appendChild(frag);
+
 }
 
 // ── Texture detection ──────────────────────────────────────────
@@ -1093,6 +1094,9 @@ for (const entry of contents) {
   typeEl.textContent = typeName;
   cell.appendChild(typeEl);
 
+  // Firefox fix: Re-rendering on click breaks dblclick
+  // Chrome is more forgiving and will still trigger dblclick even if the DOM changed underneath
+  /*
   cell.addEventListener('click', () => selectEntry(entry));
   cell.addEventListener('dblclick', () => {
     if (entry._isFolder) {
@@ -1101,7 +1105,55 @@ for (const entry of contents) {
       openLightbox(entry.asset_id, entry.name);
     }
   });
+  */
+  let clickTimer = null;
+
+  cell.addEventListener('click', () => {
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+        selectEntry(entry); // this will re-render
+    }, 400);
+  });
+
+  cell.addEventListener('dblclick', () => {
+    clearTimeout(clickTimer); // prevent select
+    if (entry._isFolder) {
+        navigateTo(entry._id);
+    } else if (isTextureType(at) && itemHasAssetId(entry)) {
+        openLightbox(entry.asset_id, entry.name);
+    }
+  });
+  
   grid.appendChild(cell);
+  /*
+  let clickTimer = null;
+
+  cell.addEventListener('click', () => {
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(() => {
+      // remove previous selection
+      const prev = grid.querySelector('.selected');
+      if (prev) prev.classList.remove('selected');
+
+        // set new selection
+        cell.classList.add('selected');
+
+      selectEntry(entry);
+    }, 400);
+  });
+
+  cell.addEventListener('dblclick', () => {
+    clearTimeout(clickTimer);
+
+    if (entry._isFolder) {
+      navigateTo(entry._id);
+    } else if (isTextureType(at) && itemHasAssetId(entry)) {
+      openLightbox(entry.asset_id, entry.name);
+    }
+  });
+
+  grid.appendChild(cell);
+*/
 }
 
 list.appendChild(grid);
