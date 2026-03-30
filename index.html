@@ -55,10 +55,26 @@
         <button class="view-btn"        id="btn-font-medium" title="Medium"           data-font="medium"><span style="font-size:12px;font-weight:700;letter-spacing:-0.5px">A</span></button>
         <button class="view-btn"        id="btn-font-large"  title="Large"            data-font="large" ><span style="font-size:14px;font-weight:700;letter-spacing:-0.5px">A</span></button>
       </div>
-      <!-- Theme switcher -->
-      <div class="view-toggle" id="theme-toggle" title="Switch theme">
-        <button class="view-btn active" id="btn-theme-dark" title="Dark theme">🌑</button>
-        <button class="view-btn" id="btn-theme-pink" title="Pink theme">🌸</button>
+      <!-- Theme switcher (dropdown) -->
+      <div id="theme-picker-wrap">
+        <button class="btn" id="btn-theme-picker" title="Switch theme">
+          <span id="theme-picker-icon">🌑</span>
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="currentColor" style="opacity:.5;margin-left:1px"><path d="M1 2.5l3.5 4 3.5-4"/></svg>
+        </button>
+        <div id="theme-dropdown" class="hidden">
+          <button class="theme-option" data-theme="dark">
+            <span class="theme-option-icon">🌑</span> Dark
+            <span class="theme-option-check" id="theme-check-dark"></span>
+          </button>
+          <button class="theme-option" data-theme="pink">
+            <span class="theme-option-icon">🌸</span> Pink
+            <span class="theme-option-check" id="theme-check-pink"></span>
+          </button>
+          <button class="theme-option" data-theme="light">
+            <span class="theme-option-icon">☀️</span> Light
+            <span class="theme-option-check" id="theme-check-light"></span>
+          </button>
+        </div>
       </div>
       <button class="btn primary" id="btn-load">⬆ Load File</button>
       <input type="file" id="file-input" accept=".gz,.json,.llsd" style="display:none">
@@ -129,7 +145,7 @@
 
         <button class="dz-video-btn" id="btn-show-video">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><circle cx="7" cy="7" r="6.5" stroke="currentColor" stroke-width="1" fill="none"/><polygon points="5.5,4 10,7 5.5,10" fill="currentColor"/></svg>
-          Watch demo
+          Watch how to find your file
         </button>
         <div class="dz-formats">
           <span class="fmt-tag">.inv.llsd.gz</span>
@@ -269,25 +285,57 @@
 // ── Theme switcher ───────────────────────────────────────────
 (function() {
   const themes = {
-    dark: './theme-dark.css',
-    pink: './theme-pink.css',
+    dark:  { css: './theme-dark.css',  icon: '🌑' },
+    pink:  { css: './theme-pink.css',  icon: '🌸' },
+    light: { css: './theme-light.css', icon: '☀️' },
   };
-  const saved = localStorage.getItem('sl_inv_theme') || 'dark';
   const sheet = document.getElementById('theme-stylesheet');
+  const saved = localStorage.getItem('sl_inv_theme') || 'dark';
 
   function applyTheme(name) {
-    sheet.href = themes[name] || themes.dark;
+    const t = themes[name] || themes.dark;
+    sheet.href = t.css;
     localStorage.setItem('sl_inv_theme', name);
-    document.querySelectorAll('#theme-toggle .view-btn').forEach(b => b.classList.remove('active'));
-    const btn = document.getElementById('btn-theme-' + name);
-    if (btn) btn.classList.add('active');
+    const pickerIcon = document.getElementById('theme-picker-icon');
+    if (pickerIcon) pickerIcon.textContent = t.icon;
+    Object.keys(themes).forEach(k => {
+      const el = document.getElementById('theme-check-' + k);
+      if (el) el.textContent = k === name ? '✓' : '';
+    });
   }
 
   applyTheme(saved);
 
   document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('btn-theme-dark').addEventListener('click', () => applyTheme('dark'));
-    document.getElementById('btn-theme-pink').addEventListener('click', () => applyTheme('pink'));
+    const btn      = document.getElementById('btn-theme-picker');
+    const dropdown = document.getElementById('theme-dropdown');
+
+    // Move dropdown to <body> so it escapes all clipping contexts
+    document.body.appendChild(dropdown);
+
+    function positionDropdown() {
+      const rect = btn.getBoundingClientRect();
+      dropdown.style.position = 'fixed';
+      dropdown.style.top  = (rect.bottom + 6) + 'px';
+      dropdown.style.left = 'auto';
+      dropdown.style.right = (window.innerWidth - rect.right) + 'px';
+    }
+
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const isHidden = dropdown.classList.contains('hidden');
+      dropdown.classList.toggle('hidden');
+      if (isHidden) positionDropdown();
+    });
+
+    dropdown.querySelectorAll('.theme-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        applyTheme(opt.dataset.theme);
+        dropdown.classList.add('hidden');
+      });
+    });
+
+    document.addEventListener('click', () => dropdown.classList.add('hidden'));
   });
 })();
 
@@ -316,6 +364,31 @@
 </script>
 
 <style>
+/* ── Theme dropdown ── */
+#theme-picker-wrap { position: relative; }
+#theme-dropdown {
+  background: var(--bg1); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  z-index: 9999; min-width: 120px;
+  animation: dropdown-in .12s ease;
+}
+#theme-dropdown.hidden { display: none; }
+@keyframes dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.theme-option {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 7px 10px; border-radius: 5px;
+  border: none; background: none; cursor: pointer;
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  color: var(--text); text-align: left; transition: background .1s;
+}
+.theme-option:hover { background: var(--hover); }
+.theme-option-icon { font-size: 14px; }
+.theme-option-check { margin-left: auto; color: var(--accent); font-size: 13px; }
+
 /* ── Font size scaling ── */
 /* default (small) = 13px base, already set in sl_inv_browser.css */
 html[data-font="medium"] { font-size: 14px; }
