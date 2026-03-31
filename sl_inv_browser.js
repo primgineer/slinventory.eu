@@ -228,16 +228,40 @@ function getIconForCategory(folderType) {
 }
 
 function getIconForItem(assetType) {
+// Integer type codes
 const t = parseInt(assetType);
-const map = {
-  0:'texture', 1:'sound', 2:'calling_card', 3:'landmark',
-  5:'clothing', 6:'object', 7:'notecard', 10:'script',
-  11:'script', 12:'texture', 13:'bodypart', 14:'trash',
-  15:'snapshot', 16:'lost_found', 17:'sound', 18:'texture',
-  19:'texture', 20:'animation', 21:'gesture', 45:'link',
-  46:'link', 50:'mesh', 56:'settings', 57:'settings',
+if (!isNaN(t)) {
+  const map = {
+    0:'texture', 1:'sound', 2:'calling_card', 3:'landmark',
+    5:'clothing', 6:'object', 7:'notecard', 10:'script',
+    11:'script', 12:'texture', 13:'bodypart', 14:'trash',
+    15:'snapshot', 16:'lost_found', 17:'sound', 18:'texture',
+    19:'texture', 20:'animation', 21:'gesture', 45:'link',
+    46:'link', 50:'mesh', 56:'settings', 57:'settings',
+  };
+  return ICONS[map[t] || 'unknown'];
+}
+// String type values from JSON exports (SL uses shorthand strings)
+const ITEM_TYPE_STR_MAP = {
+  'texture':'texture',       'image_tga':'texture',   'image_jpeg':'texture',
+  'snapshot':'snapshot',
+  'sound':'sound',
+  'object':'object',
+  'notecard':'notecard',
+  'lsl_text':'script',       'lsltext':'script',      'lsl_bytecode':'script',
+  'landmark':'landmark',
+  'clothing':'clothing',
+  'bodypart':'bodypart',     'body_part':'bodypart',
+  'animation':'animation',   'animatn':'animation',
+  'gesture':'gesture',
+  'calling_card':'calling_card', 'callcard':'calling_card',
+  'link':'link',             'link_folder':'link',
+  'mesh':'mesh',
+  'settings':'settings',     'material':'settings',
+  'category':'folder',
 };
-return ICONS[map[t] || 'unknown'];
+const key = typeof assetType === 'string' ? ITEM_TYPE_STR_MAP[assetType.toLowerCase()] : null;
+return ICONS[key || 'unknown'];
 }
 
 function getFolderTypeName(ft) {
@@ -274,6 +298,31 @@ let iconSize = 100;
 let activeTypeFilter = new Set();
 let regexMode = false;  // toggled by the .* button
 
+// Cached matcher — rebuilt only when searchQuery or regexMode changes
+let _matcherCache = { query: null, mode: null, fn: null };
+function getCachedMatcher() {
+  if (_matcherCache.query !== searchQuery || _matcherCache.mode !== regexMode) {
+    _matcherCache = { query: searchQuery, mode: regexMode, fn: buildMatcher(searchQuery) };
+  }
+  return _matcherCache.fn;
+}
+
+// Search result cache — invalidated whenever anything that affects results changes.
+// Key encodes query + regexMode + sortKey + sortAsc + active type filters.
+let _searchCache = { key: null, result: null };
+let _searchDebounceTimer = null;
+function _searchCacheKey() {
+  return searchQuery + '|' + regexMode + '|' + sortKey + '|' + sortAsc + '|' + [...activeTypeFilter].sort().join(',');
+}
+
+// Memoization cache for countDescendantItems — invalidated on buildIndex()
+let _descendantCountCache = {};
+
+// Flat search index — built once in buildIndex(), avoids re-iterating catMap/catItems on every keystroke.
+// Each entry stores only what the matcher needs (nameLower) plus a ref to the original object.
+let _searchFolders = []; // [{id, nameLower}]
+let _searchItems   = []; // [{item, nameLower}]
+
 // Thumbnail cache: assetId → 'loading' | 'ok' | 'error'
 const thumbCache = {};
 
@@ -289,6 +338,7 @@ document.documentElement.style.setProperty('--icon-sz-h', Math.round(sz * ratio)
 function buildIndex(data) {
 catMap = {}; catChildren = {}; catItems = {};
 rootCatId = null;
+_descendantCountCache = {};
 
 for (const cat of (data.categories || [])) {
   const id = cat.cat_id || cat.category_id || cat.id;
@@ -322,12 +372,23 @@ for (const id in catChildren) {
     return na < nb ? -1 : na > nb ? 1 : 0;
   });
 }
+
+// Build flat search index — one pass, done once
+_searchFolders = Object.keys(catMap).map(id => ({ id, nameLower: (catMap[id].name || '').toLowerCase() }));
+_searchItems   = [];
+for (const items of Object.values(catItems)) {
+  for (const item of items) {
+    _searchItems.push({ item, nameLower: (item.name || '').toLowerCase() });
+  }
+}
 }
 
 function countDescendantItems(catId) {
+if (_descendantCountCache[catId] !== undefined) return _descendantCountCache[catId];
 let count = (catItems[catId] || []).length;
 for (const cid of (catChildren[catId] || []))
   count += countDescendantItems(cid);
+_descendantCountCache[catId] = count;
 return count;
 }
 
@@ -417,6 +478,8 @@ selectedIndex = -1;
 // Always clear search when navigating into a folder so the contents are visible
 if (searchQuery) {
   searchQuery = '';
+  _searchCache = { key: null, result: null };
+  clearTimeout(_searchDebounceTimer);
   const searchEl = document.getElementById('search');
   if (searchEl) searchEl.value = '';
   document.getElementById('status-filter').textContent = '';
@@ -448,6 +511,19 @@ while (id && catMap[id]) {
   id = pid;
 }
 return stack;
+}
+
+// Breadcrumb collapse menu — single element reused across renders to avoid leaking
+// a new <div> and dismiss listener on every navigation.
+let _bcExpandMenu = null;
+let _bcExpandMenuDismiss = null;
+function getBcExpandMenu() {
+  if (!_bcExpandMenu) {
+    _bcExpandMenu = document.createElement('div');
+    _bcExpandMenu.className = 'bc-expand-menu hidden';
+    document.body.appendChild(_bcExpandMenu);
+  }
+  return _bcExpandMenu;
 }
 
 function renderBreadcrumb() {
@@ -492,23 +568,26 @@ if (indices) {
   bc.appendChild(renderItem(0));
   bc.appendChild(sep());
 
-  // Collapsed middle button — shows tooltip of hidden path on hover
+  // Collapsed middle button — shows dropdown of hidden path segments
   const collapse = document.createElement('span');
   collapse.className = 'bc-collapse';
   collapse.textContent = '••••';
   const hiddenPath = stack.slice(1, last - 1).map(s => s.name).join(' › ');
   collapse.title = hiddenPath;
-  // Click expands — navigates to the item just before second-to-last
-  const expandMenu = document.createElement('div');
-  expandMenu.className = 'bc-expand-menu hidden';
-  stack.slice(1, last).forEach((item, ii) => {
+
+  const expandMenu = getBcExpandMenu();
+  expandMenu.innerHTML = '';
+  expandMenu.classList.add('hidden');
+  if (_bcExpandMenuDismiss) {
+    document.removeEventListener('click', _bcExpandMenuDismiss, { capture: true });
+  }
+  stack.slice(1, last).forEach((item) => {
     const opt = document.createElement('div');
     opt.className = 'bc-expand-opt';
     opt.textContent = item.name;
     opt.addEventListener('click', e => { e.stopPropagation(); expandMenu.classList.add('hidden'); navigateTo(item.id); });
     expandMenu.appendChild(opt);
   });
-  document.body.appendChild(expandMenu);
   collapse.addEventListener('click', e => {
     e.stopPropagation();
     const r = collapse.getBoundingClientRect();
@@ -516,7 +595,8 @@ if (indices) {
     expandMenu.style.left = r.left + 'px';
     expandMenu.classList.toggle('hidden');
   });
-  document.addEventListener('click', () => expandMenu.classList.add('hidden'), { capture: true });
+  _bcExpandMenuDismiss = () => expandMenu.classList.add('hidden');
+  document.addEventListener('click', _bcExpandMenuDismiss, { capture: true });
   bc.appendChild(collapse);
 
   bc.appendChild(sep());
@@ -553,20 +633,26 @@ return activeTypeFilter.has(itemTypeKey(entry));
 }
 
 function getSortedContents(catId) {
-const matcher = buildMatcher(searchQuery);
+// In browse mode (no search) the result depends on catId — don't cache across folders.
+// In search mode the result is global and expensive — cache it.
+if (searchQuery) {
+  const cacheKey = _searchCacheKey();
+  if (_searchCache.key === cacheKey) return _searchCache.result;
+}
+
+const matcher = getCachedMatcher();
 
 let folders, its;
 
 if (searchQuery) {
+  // Use pre-built flat index — avoids Object.entries/Object.values on every keystroke
   const matchedFolderIds = new Set();
   const matchedItems = [];
-  for (const [id, cat] of Object.entries(catMap)) {
-    if (matcher(cat.name || '')) matchedFolderIds.add(id);
+  for (const { id, nameLower } of _searchFolders) {
+    if (matcher(nameLower)) matchedFolderIds.add(id);
   }
-  for (const items of Object.values(catItems)) {
-    for (const item of items) {
-      if (matcher(item.name || '')) matchedItems.push(item);
-    }
+  for (const { item, nameLower } of _searchItems) {
+    if (matcher(nameLower)) matchedItems.push(item);
   }
   folders = [...matchedFolderIds].map(id => ({ _isFolder: true, _id: id, ...catMap[id] }));
   its = matchedItems;
@@ -576,8 +662,16 @@ if (searchQuery) {
 }
 
 // Apply type filter
-folders = folders.filter(passesTypeFilter);
-its = its.filter(passesTypeFilter);
+if (activeTypeFilter.size > 0) {
+  folders = folders.filter(passesTypeFilter);
+  its     = its.filter(passesTypeFilter);
+}
+
+// Early exit — skip sort allocation if nothing matched
+if (folders.length === 0 && its.length === 0) {
+  if (searchQuery) _searchCache = { key: _searchCacheKey(), result: [] };
+  return [];
+}
 
 const sortFn = (a, b) => {
   let va, vb;
@@ -601,7 +695,10 @@ const sortFn = (a, b) => {
 
 folders.sort(sortFn);
 its.sort(sortFn);
-return [...folders, ...its];
+const result = [...folders, ...its];
+
+if (searchQuery) _searchCache = { key: _searchCacheKey(), result: result };
+return result;
 }
 
 // ============================================================
@@ -642,7 +739,19 @@ if (!raw) return escHtml(text);
 if (regexMode) {
   try {
     const re = new RegExp(raw, 'gi');
-    return escHtml(text).replace(new RegExp(raw, 'gi'), m => `<span class="hl">${escHtml(m)}</span>`);
+    // Run on raw text first, then escape each segment to avoid matching HTML entities
+    let result = '';
+    let last = 0;
+    let m;
+    re.lastIndex = 0;
+    while ((m = re.exec(text)) !== null) {
+      result += escHtml(text.slice(last, m.index));
+      result += `<span class="hl">${escHtml(m[0])}</span>`;
+      last = m.index + m[0].length;
+      if (m[0].length === 0) re.lastIndex++;
+    }
+    result += escHtml(text.slice(last));
+    return result;
   } catch { return escHtml(text); }
 }
 
@@ -702,18 +811,12 @@ const contents = getSortedContents(currentCatId);
 if (viewMode === 'icons') {
   colHeader.style.display = 'none';
   list.innerHTML = '';
-  if (contents.length === 0) {
-    list.innerHTML = '<div class="empty-state"><div class="es-icon">📭</div><div class="es-text">This folder is empty</div></div>';
-    return;
-  }
+  if (contents.length === 0) { list.innerHTML = buildEmptyState(); return; }
   renderIconGrid(list, contents);
 } else {
   colHeader.style.display = '';
   list.innerHTML = '';
-  if (contents.length === 0) {
-    list.innerHTML = '<div class="empty-state"><div class="es-icon">📭</div><div class="es-text">This folder is empty</div></div>';
-    return;
-  }
+  if (contents.length === 0) { list.innerHTML = buildEmptyState(); return; }
   renderListRows(list, contents);
 }
 }
@@ -743,7 +846,17 @@ for (const entry of contents) {
     <div class="count-cell">${countVal}</div>
   `;
 
-  row.addEventListener('click', () => selectEntry(entry));
+  row.addEventListener('mousedown', () => {
+    const prev = list.querySelector('.list-row.selected');
+    if (prev && prev !== row) prev.classList.remove('selected');
+    row.classList.add('selected');
+    selectedItem = entry;
+    selectedIsFolder = !!entry._isFolder;
+    const contents = getSortedContents(currentCatId);
+    selectedIndex = contents.findIndex(e => isSelectedEntry(e));
+    updateDetailSide(entry);
+    updateStatus();
+  });
   row.addEventListener('dblclick', () => { if (entry._isFolder) navigateTo(entry._id); });
   frag.appendChild(row);
 }
@@ -785,9 +898,8 @@ for (const item of (catItems[catId] || [])) {
   if (isTextureType(item.type) && itemHasAssetId(item)) return item.asset_id;
 }
 for (const cid of (catChildren[catId] || [])) {
-  for (const item of (catItems[cid] || [])) {
-    if (isTextureType(item.type) && itemHasAssetId(item)) return item.asset_id;
-  }
+  const found = getFirstTextureInFolder(cid);
+  if (found) return found;
 }
 return null;
 }
@@ -857,91 +969,64 @@ return `https://picture-service.secondlife.com/${assetId}/256x192.jpg`;
 // ── IntersectionObserver lazy loader ──────────────────────────
 // One shared observer for all thumb cells. When a cell scrolls into
 // view, the observer reads data attributes and triggers the load.
+
+// Shared load logic — called from both the observer callback and the cache-hit path.
+function applyThumb(el, assetId, type) {
+  if (type === 'texture') {
+    const img      = el.querySelector('img');
+    const spinWrap = el.querySelector('.thumb-icon');
+    if (!img) return;
+    img.src = thumbUrl(assetId);
+    img.addEventListener('load', () => {
+      img.classList.add('loaded');
+      el.classList.add('img-loaded');
+      thumbCache[assetId] = 'ok';
+      if (spinWrap) spinWrap.style.display = 'none';
+    }, { once: true });
+    img.addEventListener('error', () => {
+      thumbCache[assetId] = 'error';
+      img.style.display = 'none';
+      if (spinWrap) spinWrap.style.display = 'none';
+    }, { once: true });
+  } else if (type === 'folder') {
+    const svgImg = el.querySelector('image');
+    if (!svgImg) return;
+    const url = thumbUrl(assetId);
+    const testImg = new Image();
+    testImg.onload = () => {
+      svgImg.setAttribute('href', url);
+      svgImg.style.opacity = '1';
+      thumbCache[assetId] = 'ok';
+    };
+    testImg.onerror = () => { thumbCache[assetId] = 'error'; };
+    testImg.src = url;
+  }
+}
+
 const thumbObserver = new IntersectionObserver((entries) => {
   for (const entry of entries) {
     if (!entry.isIntersecting) continue;
     const el = entry.target;
-    thumbObserver.unobserve(el); // only load once
-
+    thumbObserver.unobserve(el);
     const assetId = el.dataset.lazyAsset;
-    const type    = el.dataset.lazyType; // 'texture' | 'folder'
-
+    const type    = el.dataset.lazyType;
     if (!assetId) continue;
-
-    if (type === 'texture') {
-      // el is the .thumb-box; img is its <img> child
-      const img     = el.querySelector('img');
-      const spinWrap = el.querySelector('.thumb-icon');
-      if (!img) continue;
-      img.src = thumbUrl(assetId);
-      img.addEventListener('load', () => {
-        img.classList.add('loaded');
-        el.classList.add('img-loaded');
-        thumbCache[assetId] = 'ok';
-        if (spinWrap) spinWrap.style.display = 'none';
-      }, { once: true });
-      img.addEventListener('error', () => {
-        thumbCache[assetId] = 'error';
-        img.style.display = 'none';
-        if (spinWrap) spinWrap.style.display = 'none';
-      }, { once: true });
-
-    } else if (type === 'folder') {
-      // el is the .folder-icon-wrap; SVG <image> is inside
-      const svgImg = el.querySelector('image');
-      if (!svgImg) continue;
-      const url = thumbUrl(assetId);
-      const testImg = new Image();
-      testImg.onload = () => {
-        svgImg.setAttribute('href', url);
-        svgImg.style.opacity = '1';
-        thumbCache[assetId] = 'ok';
-      };
-      testImg.onerror = () => { thumbCache[assetId] = 'error'; };
-      testImg.src = url;
-    }
+    applyThumb(el, assetId, type);
   }
 }, {
-  // Start loading slightly before the cell reaches the viewport
   rootMargin: '200px 0px',
   threshold: 0,
 });
 
 function observeThumb(el, assetId, type) {
   if (!assetId) return;
-  // If already cached and successful, skip observer and load directly
-  if (thumbCache[assetId] === 'ok') {
-    // Dispatch a synthetic load by setting the attribute and triggering immediately
-    el.dataset.lazyAsset = assetId;
-    el.dataset.lazyType  = type;
-    // Use a microtask so the element is in the DOM first
-    Promise.resolve().then(() => {
-      const fakeEntry = [{ isIntersecting: true, target: el }];
-      thumbObserver.unobserve(el); // prevent double-observe
-      // Manually trigger the load logic inline
-      if (type === 'texture') {
-        const img = el.querySelector('img');
-        if (img && !img.src) {
-          img.src = thumbUrl(assetId);
-          img.addEventListener('load', () => {
-            img.classList.add('loaded');
-            el.classList.add('img-loaded');
-            const sw = el.querySelector('.thumb-icon');
-            if (sw) sw.style.display = 'none';
-          }, { once: true });
-        }
-      } else if (type === 'folder') {
-        const svgImg = el.querySelector('image');
-        if (svgImg && !svgImg.getAttribute('href')) {
-          svgImg.setAttribute('href', thumbUrl(assetId));
-          svgImg.style.opacity = '1';
-        }
-      }
-    });
-    return;
-  }
   el.dataset.lazyAsset = assetId;
   el.dataset.lazyType  = type;
+  if (thumbCache[assetId] === 'ok') {
+    // Already cached — apply immediately in a microtask so el is in the DOM
+    Promise.resolve().then(() => applyThumb(el, assetId, type));
+    return;
+  }
   thumbObserver.observe(el);
 }
 
@@ -961,19 +1046,20 @@ imgEl.addEventListener('error', () => {
 }
 
 // ── Folder SVG shape used as visual container for thumbnails ───
-// The folder shape is an SVG with a foreignObject or clipPath so the
-// thumbnail image fills the inside of the folder icon shape.
-// We use a CSS clip-path approach: the folder body rect + tab rect,
-// composed as an SVG with an <image> inside.
 function buildFolderThumbCell(entry) {
-// Returns the thumb-area element for a folder in icon view
 const wrap = document.createElement('div');
 wrap.className = 'folder-icon-wrap';
 
+const ft = entry.preferred_type ?? entry.type_default ?? -1;
 const thumbAssetId = getFolderThumbAssetId(entry._id);
 
+// Typed icon SVG for this folder (same as sidebar uses)
+const typedIconSvg = getIconForCategory(ft);
+// Is it a generic folder icon, or a typed one?
+const isTyped = typedIconSvg !== ICONS.folder;
+
 if (thumbAssetId) {
-  // SVG folder shape with embedded <image> that fills the inside
+  // SVG folder shape with embedded thumbnail + small typed icon badge in the tab
   const svgNS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNS, 'svg');
   svg.setAttribute('viewBox', '0 0 100 80');
@@ -985,14 +1071,13 @@ if (thumbAssetId) {
   const clipId = 'fc_' + entry._id.replace(/-/g,'');
   const clip = document.createElementNS(svgNS, 'clipPath');
   clip.setAttribute('id', clipId);
-  // Folder tab (top-left bump)
   const tab = document.createElementNS(svgNS, 'path');
   tab.setAttribute('d', 'M4 22 Q4 16 10 16 L34 16 Q38 16 40 20 L46 28 L96 28 Q98 28 98 30 L98 76 Q98 78 96 78 L4 78 Q2 78 2 76 L2 24 Q2 22 4 22 Z');
   clip.appendChild(tab);
   defs.appendChild(clip);
   svg.appendChild(defs);
 
-  // Folder background (visible even before image loads)
+  // Folder background
   const bg = document.createElementNS(svgNS, 'path');
   bg.setAttribute('d', 'M4 22 Q4 16 10 16 L34 16 Q38 16 40 20 L46 28 L96 28 Q98 28 98 30 L98 76 Q98 78 96 78 L4 78 Q2 78 2 76 L2 24 Q2 22 4 22 Z');
   bg.setAttribute('fill', '#1e2e44');
@@ -1001,7 +1086,7 @@ if (thumbAssetId) {
   bg.setAttribute('opacity', '0.9');
   svg.appendChild(bg);
 
-  // Image clipped to folder shape — starts invisible
+  // Thumbnail image clipped to folder shape
   const img = document.createElementNS(svgNS, 'image');
   img.setAttribute('href', '');
   img.setAttribute('x', '2'); img.setAttribute('y', '28');
@@ -1012,7 +1097,7 @@ if (thumbAssetId) {
   img.style.transition = 'opacity 0.3s';
   svg.appendChild(img);
 
-  // Folder outline on top (gives the folder shape crisp edges over image)
+  // Folder outline on top
   const outline = document.createElementNS(svgNS, 'path');
   outline.setAttribute('d', 'M4 22 Q4 16 10 16 L34 16 Q38 16 40 20 L46 28 L96 28 Q98 28 98 30 L98 76 Q98 78 96 78 L4 78 Q2 78 2 76 L2 24 Q2 22 4 22 Z');
   outline.setAttribute('fill', 'none');
@@ -1021,17 +1106,41 @@ if (thumbAssetId) {
   outline.setAttribute('opacity', '0.85');
   svg.appendChild(outline);
 
-  wrap.appendChild(svg);
+  // Typed icon badge in the folder tab area (top-left), only if not generic folder
+  if (isTyped) {
+    const fo = document.createElementNS(svgNS, 'foreignObject');
+    fo.setAttribute('x', '4');
+    fo.setAttribute('y', '16');
+    fo.setAttribute('width', '16');
+    fo.setAttribute('height', '16');
+    fo.innerHTML = typedIconSvg;
+    svg.appendChild(fo);
+  }
 
-  // Lazy-load: observer will set href when cell enters viewport
+  wrap.appendChild(svg);
   observeThumb(wrap, thumbAssetId, 'folder');
 
 } else {
-  // Plain folder SVG, no thumbnail
-  wrap.innerHTML = `<svg viewBox="0 0 100 80" width="100" height="80" xmlns="http://www.w3.org/2000/svg">
-    <path d="M4 22 Q4 16 10 16 L34 16 Q38 16 40 20 L46 28 L96 28 Q98 28 98 30 L98 76 Q98 78 96 78 L4 78 Q2 78 2 76 L2 24 Q2 22 4 22 Z"
-      fill="#1e2e44" stroke="#4a9eff" stroke-width="1.8" opacity="0.9"/>
-  </svg>`;
+  // No thumbnail — show the typed icon scaled up inside the folder shape,
+  // the same way non-texture items show their icon in a thumb-box.
+  if (isTyped) {
+    // Typed system folder: big typed icon, folder shape as subtle backdrop
+    wrap.innerHTML = `
+      <svg viewBox="0 0 100 80" width="100" height="80" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 22 Q4 16 10 16 L34 16 Q38 16 40 20 L46 28 L96 28 Q98 28 98 30 L98 76 Q98 78 96 78 L4 78 Q2 78 2 76 L2 24 Q2 22 4 22 Z"
+          fill="#1e2e44" stroke="#4a9eff" stroke-width="1.8" opacity="0.6"/>
+        <foreignObject x="28" y="20" width="44" height="44">
+          ${typedIconSvg.replace(/width="16" height="16"/, 'width="44" height="44"')}
+        </foreignObject>
+      </svg>`;
+  } else {
+    // Generic folder — plain blue shape as before
+    wrap.innerHTML = `
+      <svg viewBox="0 0 100 80" width="100" height="80" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 22 Q4 16 10 16 L34 16 Q38 16 40 20 L46 28 L96 28 Q98 28 98 30 L98 76 Q98 78 96 78 L4 78 Q2 78 2 76 L2 24 Q2 22 4 22 Z"
+          fill="#1e2e44" stroke="#4a9eff" stroke-width="1.8" opacity="0.9"/>
+      </svg>`;
+  }
 }
 
 return wrap;
@@ -1095,16 +1204,12 @@ for (const entry of contents) {
   cell.appendChild(typeEl);
 
   // Selection on mousedown — instant visual feedback, no re-render needed.
-  // This avoids the 400ms click timer: because we never rebuild the DOM on
-  // mousedown, the cell element survives long enough for dblclick to fire
-  // reliably on both Chrome and Firefox.
+  // Because we never rebuild the DOM on mousedown, the cell element survives
+  // long enough for dblclick to fire reliably on both Chrome and Firefox.
   cell.addEventListener('mousedown', () => {
-    // Fast visual swap — just move the CSS class, no DOM rebuild
     const prev = grid.querySelector('.icon-cell.selected');
     if (prev && prev !== cell) prev.classList.remove('selected');
     cell.classList.add('selected');
-
-    // Update shared state and detail pane immediately
     selectedItem = entry;
     selectedIsFolder = !!entry._isFolder;
     const contents = getSortedContents(currentCatId);
@@ -1114,7 +1219,6 @@ for (const entry of contents) {
   });
 
   cell.addEventListener('dblclick', () => {
-    // DOM is intact (no re-render happened), so dblclick fires correctly
     if (entry._isFolder) {
       navigateTo(entry._id);
     } else if (isTextureType(at) && itemHasAssetId(entry)) {
@@ -1142,7 +1246,18 @@ selectedIndex = (index !== undefined) ? index : (() => {
   const contents = getSortedContents(currentCatId);
   return contents.findIndex(e => isSelectedEntry(e));
 })();
-renderContentList();
+
+// Lightweight selection update: swap .selected class without rebuilding the DOM.
+// Full renderContentList() is only needed when contents change (navigation/sort/filter).
+const list = document.getElementById('content-list');
+if (list) {
+  list.querySelectorAll('.list-row.selected, .icon-cell.selected')
+      .forEach(el => el.classList.remove('selected'));
+  // Find the cell/row at selectedIndex and mark it
+  const rows = list.querySelectorAll('.list-row, .icon-cell');
+  if (rows[selectedIndex]) rows[selectedIndex].classList.add('selected');
+}
+
 updateDetailSide(entry);
 updateStatus();
 // Scroll selected row/cell into view
@@ -1159,8 +1274,8 @@ const clamped = Math.max(0, Math.min(contents.length - 1, idx));
 selectEntry(contents[clamped], clamped);
 }
 
-// Count columns in the icon grid by comparing the top-offsets of rendered cells.
-// Accurate for any auto-fill / 1fr grid without reverse-engineering the CSS formula.
+// Count columns by inspecting actual rendered cell positions — accurate for
+// any auto-fill/1fr grid regardless of icon size, gap, or container width.
 function getGridCols(grid) {
 if (!grid) return 4;
 const cells = grid.querySelectorAll('.icon-cell');
@@ -1354,13 +1469,13 @@ const FILTER_GROUPS = [
   { key: 'landmark',     label: 'Landmarks',    icon: 'landmark'     },
   { key: 'sound',        label: 'Sounds',       icon: 'sound'        },
   { key: 'settings',     label: 'Settings',     icon: 'settings'     },
-]},
-{ label: 'Wearables', types: [
   { key: 'texture',      label: 'Textures',     icon: 'texture'      },
-  { key: 'clothing',     label: 'Clothing',     icon: 'clothing'     },
-  { key: 'bodypart',     label: 'Body Parts',   icon: 'bodypart'     },
   { key: 'calling_card', label: 'Calling Cards',icon: 'calling_card' },
   { key: 'snapshot',     label: 'Snapshots',    icon: 'snapshot'     },
+]},
+{ label: 'Wearables', types: [
+  { key: 'clothing',     label: 'Clothing',     icon: 'clothing'     },
+  { key: 'bodypart',     label: 'Body Parts',   icon: 'bodypart'     },
   { key: 'link',         label: 'Links',        icon: 'link'         },
   { key: 'lost_found',   label: 'Lost & Found', icon: 'lost_found'   },
 ]},
@@ -1481,42 +1596,43 @@ const PARSE_FILTER_GROUPS = [
   { key: 'category', label: 'Folders', icon: 'folder' },
 ]},
 { id: 'content', label: 'Content', types: [
-  { key: 'object',       label: 'Objects',    icon: 'object'    },
-  { key: 'notecard',     label: 'Notecards',  icon: 'notecard'  },
-  { key: 'script',       label: 'Scripts',    icon: 'script'    },
-  { key: 'mesh',         label: 'Meshes',     icon: 'mesh'      },
-  { key: 'animation',    label: 'Animations', icon: 'animation' },
-  { key: 'gesture',      label: 'Gestures',   icon: 'gesture'   },
-  { key: 'landmark',     label: 'Landmarks',  icon: 'landmark'  },
-  { key: 'sound',        label: 'Sounds',     icon: 'sound'     },
-  { key: 'settings',     label: 'Settings',   icon: 'settings'  },
-]},
-{ id: 'wearables', label: 'Wearables', types: [
+  { key: 'object',       label: 'Objects',      icon: 'object'       },
+  { key: 'notecard',     label: 'Notecards',    icon: 'notecard'     },
+  { key: 'script',       label: 'Scripts',      icon: 'script'       },
+  { key: 'mesh',         label: 'Meshes',       icon: 'mesh'         },
+  { key: 'animation',    label: 'Animations',   icon: 'animation'    },
+  { key: 'gesture',      label: 'Gestures',     icon: 'gesture'      },
+  { key: 'landmark',     label: 'Landmarks',    icon: 'landmark'     },
+  { key: 'sound',        label: 'Sounds',       icon: 'sound'        },
+  { key: 'settings',     label: 'Settings',     icon: 'settings'     },
   { key: 'texture',      label: 'Textures',     icon: 'texture'      },
-  { key: 'clothing',     label: 'Clothing',     icon: 'clothing'     },
-  { key: 'bodypart',     label: 'Body Parts',   icon: 'bodypart'     },
   { key: 'calling_card', label: 'Calling Cards',icon: 'calling_card' },
   { key: 'snapshot',     label: 'Snapshots',    icon: 'snapshot'     },
+]},
+{ id: 'wearables', label: 'Wearables', types: [
+  { key: 'clothing',     label: 'Clothing',     icon: 'clothing'     },
+  { key: 'bodypart',     label: 'Body Parts',   icon: 'bodypart'     },
   { key: 'link',         label: 'Links',        icon: 'link'         },
 ]},
 ];
 
-// Maps parse filter key → LLSD type strings/ints to keep
+// Maps parse filter key → LLSD type strings/ints to keep.
+// Must cover BOTH integer type codes AND all string variants seen in SL JSON exports.
 const PARSE_KEY_TO_TYPES = {
 category:     ['category', 8, 9],
 object:       ['object', 6],
 notecard:     ['notecard', 7],
-script:       ['lsl_text', 'lsl_bytecode', 10, 11],
+script:       ['lsl_text', 'lsl_bytecode', 'lsltext', 10, 11],
 mesh:         ['mesh', 50],
-animation:    ['animation', 20],
+animation:    ['animation', 'animatn', 20],
 gesture:      ['gesture', 21],
 landmark:     ['landmark', 3],
 sound:        ['sound', 1, 17],
-settings:     ['settings', 56],
+settings:     ['settings', 'material', 56, 57],
 texture:      ['texture', 'image_tga', 'image_jpeg', 0, 12, 18, 19],
 clothing:     ['clothing', 5],
-bodypart:     ['bodypart', 13],
-calling_card: ['calling_card', 2],
+bodypart:     ['bodypart', 'body_part', 13],
+calling_card: ['calling_card', 'callcard', 2],
 snapshot:     ['snapshot', 15],
 link:         ['link', 45, 46],
 };
@@ -1530,7 +1646,7 @@ const SYSTEM_FOLDER_TYPES = new Set([
   'bodypart', 'callcard', 'clothing', 'current', 'favorite',
   'my_otfts', 'gesture', 'landmark', 'lstndfnd', 'material',
   'notecard', 'snapshot', 'inbox', 'lsltext', 'settings',
-  'sound', 'texture', 'trash',
+  'sound', 'texture', 'trash', 'animatn', 'object',
 ]);
 
 function buildParseModal() {
@@ -1764,6 +1880,9 @@ if (label !== null) {
 async function loadFile(file) {
 const name = file.name.toLowerCase();
 
+// Dismiss resume banner if still visible — user is loading a new file
+document.getElementById('resume-banner')?.classList.add('hidden');
+
 // For .gz files, show the parse filter modal first
 if (name.endsWith('.gz')) {
   showParseModal(file);
@@ -1857,6 +1976,7 @@ try {
 function setSortKey(key) {
 if (sortKey === key) sortAsc = !sortAsc;
 else { sortKey = key; sortAsc = true; }
+_searchCache = { key: null, result: null }; // sort change invalidates cached results
 
 document.querySelectorAll('.col-h').forEach(el => el.classList.remove('sorted'));
 const el = document.getElementById('sort-' + key);
@@ -1873,26 +1993,27 @@ renderContentList();
 function initResizer(resizerId, leftId) {
 const resizer = document.getElementById(resizerId);
 const leftEl  = document.getElementById(leftId);
-let dragging = false, startX = 0, startW = 0;
+let startX = 0, startW = 0;
 
-resizer.addEventListener('mousedown', e => {
-  dragging = true; startX = e.clientX; startW = leftEl.offsetWidth;
-  resizer.classList.add('dragging');
-  document.body.style.cursor = 'col-resize';
-  document.body.style.userSelect = 'none';
-});
-document.addEventListener('mousemove', e => {
-  if (!dragging) return;
+function onMove(e) {
   const newW = Math.max(160, Math.min(600, startW + e.clientX - startX));
   leftEl.style.width = newW + 'px';
   if (leftId === 'tree-panel') leftEl.style.minWidth = leftEl.style.maxWidth = '';
-});
-document.addEventListener('mouseup', () => {
-  if (!dragging) return;
-  dragging = false;
+}
+function onUp() {
   resizer.classList.remove('dragging');
   document.body.style.cursor = '';
   document.body.style.userSelect = '';
+  document.removeEventListener('mousemove', onMove);
+  document.removeEventListener('mouseup', onUp);
+}
+resizer.addEventListener('mousedown', e => {
+  startX = e.clientX; startW = leftEl.offsetWidth;
+  resizer.classList.add('dragging');
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
 });
 }
 
@@ -1903,26 +2024,26 @@ function initDetailResizer() {
 const resizer = document.getElementById('resizer3');
 const panel   = document.getElementById('detail-side');
 if (!resizer || !panel) return;
-let dragging = false, startX = 0, startW = 0;
+let startX = 0, startW = 0;
 
-resizer.addEventListener('mousedown', e => {
-  dragging = true; startX = e.clientX; startW = panel.offsetWidth;
-  resizer.classList.add('dragging');
-  document.body.style.cursor = 'col-resize';
-  document.body.style.userSelect = 'none';
-});
-document.addEventListener('mousemove', e => {
-  if (!dragging) return;
-  // Dragging left = bigger panel; right = smaller
+function onMove(e) {
   const newW = Math.max(160, Math.min(480, startW - (e.clientX - startX)));
   panel.style.width = newW + 'px';
-});
-document.addEventListener('mouseup', () => {
-  if (!dragging) return;
-  dragging = false;
+}
+function onUp() {
   resizer.classList.remove('dragging');
   document.body.style.cursor = '';
   document.body.style.userSelect = '';
+  document.removeEventListener('mousemove', onMove);
+  document.removeEventListener('mouseup', onUp);
+}
+resizer.addEventListener('mousedown', e => {
+  startX = e.clientX; startW = panel.offsetWidth;
+  resizer.classList.add('dragging');
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
 });
 }
 
@@ -2053,8 +2174,8 @@ document.addEventListener('keydown', e => {
       if (e.key === 'ArrowDown') next = selectedIndex < 0 ? 0 : selectedIndex + 1;
       if (e.key === 'ArrowUp')   next = selectedIndex < 0 ? 0 : selectedIndex - 1;
     } else {
-      // Icons grid: derive column count from actual rendered layout,
-      // not from a formula — auto-fill with 1fr expansion makes math unreliable.
+      // Icons grid: derive column count from actual rendered layout.
+      // Math.round(offsetWidth / cellSize) breaks with 1fr expansion — ask the DOM instead.
       const grid = document.querySelector('.icon-grid');
       const cols = getGridCols(grid);
       if (e.key === 'ArrowRight') next = selectedIndex < 0 ? 0 : selectedIndex + 1;
@@ -2149,6 +2270,7 @@ document.getElementById('file-input').addEventListener('change', e => {
 
 document.getElementById('btn-regex').addEventListener('click', () => {
   regexMode = !regexMode;
+  _searchCache = { key: null, result: null }; // regex mode change invalidates cached results
   const btn = document.getElementById('btn-regex');
   const input = document.getElementById('search');
   btn.classList.toggle('active', regexMode);
@@ -2170,18 +2292,44 @@ searchClear.addEventListener('click', () => {
 });
 
 document.getElementById('search').addEventListener('input', e => {
-  searchQuery = e.target.value.trim();
-  searchClear.classList.toggle('visible', searchQuery.length > 0);
-  renderContentList();
-  // Update status to show result count during search
-  if (searchQuery) {
-    const contents = getSortedContents(currentCatId);
-    document.getElementById('status-filter').textContent =
-      `Search: "${searchQuery}" — ${contents.length.toLocaleString()} results`;
-  } else {
+  const raw = e.target.value.trim();
+  searchClear.classList.toggle('visible', raw.length > 0);
+
+  // Always cancel any pending search first
+  clearTimeout(_searchDebounceTimer);
+
+  // Instant UI feedback: clear the pane immediately when query is cleared
+  if (!raw) {
+    searchQuery = '';
+    _searchCache = { key: null, result: null };
     document.getElementById('status-filter').textContent = '';
+    renderContentList();
+    updateStatus();
+    return;
   }
-  updateStatus();
+
+  // Don't start a global scan on a single character — the result set is enormous
+  // and gives no useful signal. Show a prompt instead and wait for more input.
+  if (raw.length < 2) {
+    document.getElementById('status-filter').textContent = 'Type more to search…';
+    return;
+  }
+
+  // Debounce: wait for typing to pause before running the expensive global scan.
+  // 300ms clears a full inter-keystroke gap at normal typing speed (~200-250ms),
+  // so intermediate characters are skipped entirely on large inventories.
+  _searchDebounceTimer = setTimeout(() => {
+    searchQuery = raw;
+    _searchCache = { key: null, result: null };
+    renderContentList();
+    // Status bar reuses the now-cached result — no second scan
+    if (searchQuery) {
+      const contents = getSortedContents(currentCatId);
+      document.getElementById('status-filter').textContent =
+        `Search: "${searchQuery}" — ${contents.length.toLocaleString()} results`;
+    }
+    updateStatus();
+  }, 300);
 });
 
 document.getElementById('btn-expand-all').addEventListener('click', () => {
