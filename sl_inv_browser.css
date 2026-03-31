@@ -331,14 +331,10 @@ html, body { height: 100%; overflow: hidden; font-family: 'JetBrains Mono', mono
   width: 100%;
   height: 100%;
   object-fit: cover;
-
-  /* keep visible */
   opacity: 1;
-
-  /* stabilize rendering */
-  backface-visibility: hidden;
+  /* Promote to own compositor layer — prevents repaint/reflow flicker on re-render */
   transform: translateZ(0);
-} 
+}
 .thumb-box img.loaded { opacity: 1; }
 
 .thumb-box .thumb-icon {

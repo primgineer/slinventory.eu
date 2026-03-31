@@ -1094,57 +1094,27 @@ for (const entry of contents) {
   typeEl.textContent = typeName;
   cell.appendChild(typeEl);
 
-  // Firefox fix: Re-rendering on click breaks dblclick
-  // Chrome is more forgiving and will still trigger dblclick even if the DOM changed underneath
-  /*
-  cell.addEventListener('click', () => selectEntry(entry));
-  cell.addEventListener('dblclick', () => {
-    if (entry._isFolder) {
-      navigateTo(entry._id);
-    } else if (isTextureType(at) && itemHasAssetId(entry)) {
-      openLightbox(entry.asset_id, entry.name);
-    }
-  });
-  */
-  let clickTimer = null;
+  // Selection on mousedown — instant visual feedback, no re-render needed.
+  // This avoids the 400ms click timer: because we never rebuild the DOM on
+  // mousedown, the cell element survives long enough for dblclick to fire
+  // reliably on both Chrome and Firefox.
+  cell.addEventListener('mousedown', () => {
+    // Fast visual swap — just move the CSS class, no DOM rebuild
+    const prev = grid.querySelector('.icon-cell.selected');
+    if (prev && prev !== cell) prev.classList.remove('selected');
+    cell.classList.add('selected');
 
-  cell.addEventListener('click', () => {
-    clearTimeout(clickTimer);
-    clickTimer = setTimeout(() => {
-        selectEntry(entry); // this will re-render
-    }, 400);
+    // Update shared state and detail pane immediately
+    selectedItem = entry;
+    selectedIsFolder = !!entry._isFolder;
+    const contents = getSortedContents(currentCatId);
+    selectedIndex = contents.findIndex(e => isSelectedEntry(e));
+    updateDetailSide(entry);
+    updateStatus();
   });
 
   cell.addEventListener('dblclick', () => {
-    clearTimeout(clickTimer); // prevent select
-    if (entry._isFolder) {
-        navigateTo(entry._id);
-    } else if (isTextureType(at) && itemHasAssetId(entry)) {
-        openLightbox(entry.asset_id, entry.name);
-    }
-  });
-  
-  grid.appendChild(cell);
-  /*
-  let clickTimer = null;
-
-  cell.addEventListener('click', () => {
-    clearTimeout(clickTimer);
-    clickTimer = setTimeout(() => {
-      // remove previous selection
-      const prev = grid.querySelector('.selected');
-      if (prev) prev.classList.remove('selected');
-
-        // set new selection
-        cell.classList.add('selected');
-
-      selectEntry(entry);
-    }, 400);
-  });
-
-  cell.addEventListener('dblclick', () => {
-    clearTimeout(clickTimer);
-
+    // DOM is intact (no re-render happened), so dblclick fires correctly
     if (entry._isFolder) {
       navigateTo(entry._id);
     } else if (isTextureType(at) && itemHasAssetId(entry)) {
@@ -1153,7 +1123,6 @@ for (const entry of contents) {
   });
 
   grid.appendChild(cell);
-*/
 }
 
 list.appendChild(grid);
@@ -1188,6 +1157,21 @@ const contents = getSortedContents(currentCatId);
 if (!contents.length) return;
 const clamped = Math.max(0, Math.min(contents.length - 1, idx));
 selectEntry(contents[clamped], clamped);
+}
+
+// Count columns in the icon grid by comparing the top-offsets of rendered cells.
+// Accurate for any auto-fill / 1fr grid without reverse-engineering the CSS formula.
+function getGridCols(grid) {
+if (!grid) return 4;
+const cells = grid.querySelectorAll('.icon-cell');
+if (cells.length < 2) return cells.length || 1;
+const firstTop = cells[0].getBoundingClientRect().top;
+let cols = 0;
+for (const c of cells) {
+  if (c.getBoundingClientRect().top !== firstTop) break;
+  cols++;
+}
+return cols || 1;
 }
 
 function formatDate(ts) {
@@ -2069,9 +2053,10 @@ document.addEventListener('keydown', e => {
       if (e.key === 'ArrowDown') next = selectedIndex < 0 ? 0 : selectedIndex + 1;
       if (e.key === 'ArrowUp')   next = selectedIndex < 0 ? 0 : selectedIndex - 1;
     } else {
-      // Icons grid: calculate columns from CSS variable
+      // Icons grid: derive column count from actual rendered layout,
+      // not from a formula — auto-fill with 1fr expansion makes math unreliable.
       const grid = document.querySelector('.icon-grid');
-      const cols = grid ? Math.round(grid.offsetWidth / (iconSize + 24 + 6)) : 4;
+      const cols = getGridCols(grid);
       if (e.key === 'ArrowRight') next = selectedIndex < 0 ? 0 : selectedIndex + 1;
       if (e.key === 'ArrowLeft')  next = selectedIndex < 0 ? 0 : selectedIndex - 1;
       if (e.key === 'ArrowDown')  next = selectedIndex < 0 ? 0 : selectedIndex + cols;
