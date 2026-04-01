@@ -142,14 +142,19 @@ readUint32() {
 // ============================================================
 // Type tables
 // ============================================================
+// Asset type display names — from llassettype.h EType enum
 const ASSET_TYPE = {
-'-1':'Unknown', 0:'Texture', 1:'Sound', 2:'Calling Card', 3:'Landmark',
-5:'Clothing', 6:'Object', 7:'Notecard', 8:'Folder', 9:'Root Folder',
-10:'Script', 11:'Script Bytecode', 12:'Texture (TGA)', 13:'Body Part',
-14:'Trash', 15:'Snapshots', 16:'Lost & Found', 17:'Sound (WAV)',
-18:'Image (TGA)', 19:'Image (JPEG)', 20:'Animation', 21:'Gesture',
-22:'Simstate', 24:'Favorites', 45:'Link', 46:'Folder Link',
-49:'Marketplace', 50:'Mesh', 56:'Settings', 57:'Material',
+'-1':'Unknown',
+0:'Texture', 1:'Sound', 2:'Calling Card', 3:'Landmark',
+4:'Script', 5:'Clothing', 6:'Object', 7:'Notecard',
+8:'Folder', 9:'Root Folder',
+10:'LSL Text', 11:'LSL Bytecode', 12:'Texture (TGA)', 13:'Body Part',
+17:'Sound (WAV)', 18:'Image (TGA)', 19:'Image (JPEG)',
+20:'Animation', 21:'Gesture', 22:'Simstate',
+24:'Link', 25:'Folder Link', 26:'Marketplace Folder',
+49:'Mesh',
+56:'Settings', 57:'Material', 58:'GLTF', 59:'GLTF Binary',
+255:'Unknown',
 };
 
 const FOLDER_TYPE = {
@@ -157,7 +162,7 @@ const FOLDER_TYPE = {
 5:'Clothing', 6:'Objects', 7:'Notecards', 8:'Folder', 9:'My Inventory',
 10:'Scripts', 13:'Body Parts', 14:'Trash', 15:'Snapshots',
 16:'Lost & Found', 20:'Animations', 21:'Gestures', 45:'Links',
-46:'Folder Links', 49:'Marketplace', 50:'Meshes', 56:'Settings', 57:'Materials',
+46:'Folder Links', 49:'Meshes', 50:'Meshes', 56:'Settings', 57:'Materials',
 };
 
 // ============================================================
@@ -178,6 +183,8 @@ animation:    `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circ
 gesture:      `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M7 3.5V9M9 4.5V9M11 5.5V9M5 6.5V9M5 9c0 2.5 1.5 4.5 6 4.5S13 11 13 9" stroke="#3dba7f" stroke-width="1.2" stroke-linecap="round"/></svg>`,
 mesh:         `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2l5 3v6l-5 3-5-3V5l5-3z" fill="none" stroke="#2dbdba" stroke-width="1.2"/><path d="M3 5l5 3m0 0l5-3m-5 3v6" stroke="#2dbdba" stroke-width="1" opacity=".5"/></svg>`,
 settings:     `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2" stroke="#4a9eff" stroke-width="1.2"/><path d="M8 2v1.5M8 12.5V14M2 8h1.5M12.5 8H14M3.5 3.5l1 1M11.5 11.5l1 1M12.5 3.5l-1 1M4.5 11.5l-1 1" stroke="#4a9eff" stroke-width="1.2" stroke-linecap="round" opacity=".6"/></svg>`,
+material:     `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="5" width="9" height="9" rx="1" fill="#e8a630" opacity=".15" stroke="#e8a630" stroke-width="1.2"/><rect x="5" y="2" width="9" height="9" rx="1" fill="#e8a630" opacity=".08" stroke="#e8a630" stroke-width="1.2" stroke-dasharray="2 1.5"/><circle cx="6.5" cy="9.5" r="1.5" fill="#e8a630" opacity=".7"/></svg>`,
+gltf:         `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4h12v8H2z" fill="#3dba7f" opacity=".08" stroke="#3dba7f" stroke-width="1.2" rx="1"/><text x="8" y="10.5" text-anchor="middle" font-family="monospace" font-size="6" fill="#3dba7f" font-weight="bold">glTF</text></svg>`,
 trash:        `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 4.5h10M6 4.5V3h4v1.5M5 4.5l.5 8h5l.5-8" stroke="#e85555" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity=".7"/></svg>`,
 calling_card: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8" rx="1.5" fill="#9b6dff" opacity=".12" stroke="#9b6dff" stroke-width="1.2"/><circle cx="5.5" cy="7" r="1.2" fill="#9b6dff" opacity=".7"/><line x1="8" y1="6.5" x2="12" y2="6.5" stroke="#9b6dff" stroke-width="1" stroke-linecap="round" opacity=".5"/><line x1="8" y1="8.5" x2="10.5" y2="8.5" stroke="#9b6dff" stroke-width="1" stroke-linecap="round" opacity=".4"/></svg>`,
 lost_found:   `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" fill="#e8a630" opacity=".1" stroke="#e8a630" stroke-width="1.2"/><text x="8" y="11.5" text-anchor="middle" font-family="monospace" font-size="8" fill="#e8a630" font-weight="bold">?</text></svg>`,
@@ -187,6 +194,8 @@ unknown:      `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect
 };
 
 // String preferred_type → icon key
+// FIX: SL uses "animatn" as preferred_type for Animation folders.
+// Map it to canonical "animation" so correct icon/behavior is applied.
 const FOLDER_TYPE_STR_MAP = {
   'texture':'texture',     'textures':'texture',
   'sound':'sound',         'sounds':'sound',
@@ -200,11 +209,11 @@ const FOLDER_TYPE_STR_MAP = {
   'trash':'trash',
   'snapshot':'snapshot',   'snapshots':'snapshot',
   'lstndfnd':'lost_found', 'lost_and_found':'lost_found',
-  'animation':'animation', 'animations':'animation',
+  'animation':'animation', 'animations':'animation', 'animatn':'animation', 
   'gesture':'gesture',     'gestures':'gesture',
   'link':'link',
   'mesh':'mesh',           'meshes':'mesh',
-  'settings':'settings',   'material':'settings',
+  'settings':'settings',   'material':'material',   'gltf':'gltf',
   'inbox':'notecard',
   'favorite':'landmark',   'favorites':'landmark',
   'my_otfts':'clothing',   'current':'clothing',
@@ -222,46 +231,15 @@ function getIconForCategory(folderType) {
     5:'clothing', 6:'object', 7:'notecard', 10:'script',
     13:'bodypart', 14:'trash', 15:'snapshot', 16:'lost_found',
     20:'animation', 21:'gesture', 45:'link', 46:'link',
-    50:'mesh', 56:'settings', 57:'settings',
+    49:'mesh', 56:'settings', 57:'material', 58:'gltf', 59:'gltf',
   };
   return ICONS[map[t] || 'folder'];
 }
 
-function getIconForItem(assetType) {
-// Integer type codes
-const t = parseInt(assetType);
-if (!isNaN(t)) {
-  const map = {
-    0:'texture', 1:'sound', 2:'calling_card', 3:'landmark',
-    5:'clothing', 6:'object', 7:'notecard', 10:'script',
-    11:'script', 12:'texture', 13:'bodypart', 14:'trash',
-    15:'snapshot', 16:'lost_found', 17:'sound', 18:'texture',
-    19:'texture', 20:'animation', 21:'gesture', 45:'link',
-    46:'link', 50:'mesh', 56:'settings', 57:'settings',
-  };
-  return ICONS[map[t] || 'unknown'];
-}
-// String type values from JSON exports (SL uses shorthand strings)
-const ITEM_TYPE_STR_MAP = {
-  'texture':'texture',       'image_tga':'texture',   'image_jpeg':'texture',
-  'snapshot':'snapshot',
-  'sound':'sound',
-  'object':'object',
-  'notecard':'notecard',
-  'lsl_text':'script',       'lsltext':'script',      'lsl_bytecode':'script',
-  'landmark':'landmark',
-  'clothing':'clothing',
-  'bodypart':'bodypart',     'body_part':'bodypart',
-  'animation':'animation',   'animatn':'animation',
-  'gesture':'gesture',
-  'calling_card':'calling_card', 'callcard':'calling_card',
-  'link':'link',             'link_folder':'link',
-  'mesh':'mesh',
-  'settings':'settings',     'material':'settings',
-  'category':'folder',
-};
-const key = typeof assetType === 'string' ? ITEM_TYPE_STR_MAP[assetType.toLowerCase()] : null;
-return ICONS[key || 'unknown'];
+// getIconForItem now accepts a canonical _typeKey string (resolved at index time).
+// No more raw field parsing needed here.
+function getIconForItem(typeKey) {
+  return ICONS[typeKey] || ICONS.unknown;
 }
 
 function getFolderTypeName(ft) {
@@ -270,6 +248,20 @@ return FOLDER_TYPE[ft] || FOLDER_TYPE[-1];
 
 function getAssetTypeName(at) {
 return ASSET_TYPE[at] || `Type ${at}`;
+}
+
+// Human-readable display name from a canonical _typeKey.
+const TYPE_KEY_NAMES = {
+  texture:'Texture', sound:'Sound', calling_card:'Calling Card',
+  landmark:'Landmark', clothing:'Clothing', object:'Object',
+  notecard:'Notecard', script:'Script', bodypart:'Body Part',
+  trash:'Trash', snapshot:'Snapshot', lost_found:'Lost & Found',
+  animation:'Animation', gesture:'Gesture', link:'Link',
+  mesh:'Mesh', settings:'Settings', material:'Material', gltf:'GLTF',
+  folder:'Folder', unknown:'Unknown',
+};
+function getTypeKeyName(typeKey) {
+  return TYPE_KEY_NAMES[typeKey] || typeKey || 'Unknown';
 }
 
 // ============================================================
@@ -360,6 +352,7 @@ for (const cat of (data.categories || [])) {
 }
 
 for (const item of (data.items || [])) {
+  item._typeKey = resolveTypeKey(item); // canonical, resolved once
   const pid = item.parent_id;
   if (pid && catItems[pid]) catItems[pid].push(item);
 }
@@ -606,24 +599,84 @@ if (indices) {
 }
 }
 
-// Canonical type key for an item, matching the keys used in getIconForItem map
-function itemTypeKey(item) {
-const t = item.type;
-const iconMap = {
-  0:'texture', 1:'sound', 2:'calling_card', 3:'landmark',
-  5:'clothing', 6:'object', 7:'notecard', 10:'script',
-  11:'script', 12:'texture', 13:'bodypart', 14:'trash',
-  15:'snapshot', 16:'lost_found', 17:'sound', 18:'texture',
-  19:'texture', 20:'animation', 21:'gesture', 45:'link',
-  46:'link', 50:'mesh', 56:'settings', 57:'settings',
+// ============================================================
+// Canonical item type resolution
+// ============================================================
+// ── Inventory type → canonical key (inv_type field) ──────────
+// SL uses two independent type systems. This map covers the inv_type field
+// which is what distinguishes texture vs snapshot, script vs lsl_bytecode, etc.
+const INV_TYPE_MAP = {
+  // String values (JSON exports)
+  'texture':'texture',       'snapshot':'snapshot',
+  'sound':'sound',           'object':'object',
+  'notecard':'notecard',     'script':'script',       'lsltext':'script',
+  'landmark':'landmark',     'clothing':'clothing',   'wearable':'clothing',
+  'bodypart':'bodypart',     'body_part':'bodypart',
+  'animation':'animation',   'animatn':'animation',
+  'gesture':'gesture',
+  'calling_card':'calling_card', 'callcard':'calling_card',
+  'link':'link',             'link_folder':'link',
+  'mesh':'mesh',
+  'settings':'settings',     'material':'material',
+  'gltf':'gltf',             'gltf_bin':'gltf',
+  'lost_and_found':'lost_found',
+  // Integer values (binary LLSD — LLInventoryType enum, separate from asset types)
+  '0':'texture',   '1':'sound',     '2':'calling_card', '3':'landmark',
+  '5':'object',    '6':'notecard',  '9':'script',       '10':'clothing',
+  '13':'animation','14':'gesture',  '15':'snapshot',    '17':'bodypart',
+  '18':'mesh',     '25':'settings', '26':'material',
 };
-if (typeof t === 'number') return iconMap[t] || 'unknown';
-if (typeof t === 'string') {
-  const n = parseInt(t);
-  if (!isNaN(n)) return iconMap[n] || t.toLowerCase();
-  return t.toLowerCase();
+
+// ── Asset type → canonical key (type field) ───────────────────
+// Fallback when inv_type is absent (older binary LLSD, partial data).
+// Does NOT distinguish texture vs snapshot — use inv_type for that.
+// Integer codes from llassettype.h EType enum.
+const ASSET_TYPE_MAP = {
+  // String values (JSON exports)
+  'texture':'texture',  'image_tga':'texture', 'image_jpeg':'texture', 'texture_tga':'texture',
+  'sound':'sound',
+  'calling_card':'calling_card', 'callcard':'calling_card',
+  'landmark':'landmark',
+  'clothing':'clothing',
+  'object':'object',
+  'notecard':'notecard',
+  'lsl_text':'script',  'lsltext':'script',  'lsl_bytecode':'script',
+  'bodypart':'bodypart','body_part':'bodypart',
+  'animatn':'animation','animation':'animation',
+  'gesture':'gesture',
+  'link':'link',        'link_folder':'link',
+  'mesh':'mesh',
+  'settings':'settings','material':'material',
+  'gltf':'gltf',        'gltf_bin':'gltf',
+  // Integer values — llassettype.h EType
+  '0':'texture',   '1':'sound',    '2':'calling_card', '3':'landmark',
+  '4':'script',    '5':'clothing', '6':'object',       '7':'notecard',
+  '10':'script',   '11':'script',  '12':'texture',
+  '13':'bodypart', '17':'sound',
+  '18':'texture',  '19':'texture',
+  '20':'animation','21':'gesture', '22':'unknown',
+  '24':'link',     '25':'link',    '26':'unknown',
+  '49':'mesh',
+  '56':'settings', '57':'material','58':'gltf',        '59':'gltf',
+};
+
+function resolveTypeKey(item) {
+  // inv_type is authoritative — it distinguishes texture vs snapshot, etc.
+  if (item.inv_type != null) {
+    const k = INV_TYPE_MAP[String(item.inv_type).toLowerCase()];
+    if (k) return k;
+  }
+  // Fallback to asset type when inv_type is absent (binary LLSD without inv_type)
+  if (item.type != null) {
+    const k = ASSET_TYPE_MAP[String(item.type).toLowerCase()];
+    if (k) return k;
+  }
+  return 'unknown';
 }
-return 'unknown';
+
+// Canonical type key for an item — resolved once at index time, read here.
+function itemTypeKey(item) {
+  return item._typeKey || 'unknown';
 }
 
 function passesTypeFilter(entry) {
@@ -677,8 +730,8 @@ const sortFn = (a, b) => {
   let va, vb;
   if (sortKey === 'name') { va = (a.name||'').toLowerCase(); vb = (b.name||'').toLowerCase(); }
   else if (sortKey === 'type') {
-    va = a._isFolder ? 'folder' : getAssetTypeName(a.type || -1);
-    vb = b._isFolder ? 'folder' : getAssetTypeName(b.type || -1);
+    va = a._isFolder ? 'folder' : getTypeKeyName(a._typeKey || 'unknown');
+    vb = b._isFolder ? 'folder' : getTypeKeyName(b._typeKey || 'unknown');
   }
   else if (sortKey === 'date') {
     va = a.creation_date || 0;
@@ -756,6 +809,14 @@ if (regexMode) {
 }
 
 // Multi-word AND: highlight each term separately
+// FIX: Multi-term (+) highlighting was corrupting HTML.
+// Previous implementation ran successive .replace() calls on already-generated HTML,
+// causing matches inside <span> tags (e.g. matching "s" in "<span>").
+// This resulted in broken markup like "<span class="hl">gunspan>".
+//
+// Solution: Build a single combined regex and process the original text once,
+// inserting highlights without ever modifying existing HTML.
+/*
 if (raw.includes('+')) {
   const terms = raw.split('+').map(t => t.trim()).filter(Boolean);
   let result = escHtml(text);
@@ -764,6 +825,32 @@ if (raw.includes('+')) {
     const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     result = result.replace(new RegExp(escaped, 'gi'), m => `<span class="hl">${m}</span>`);
   }
+  return result;
+}
+*/
+if (raw.includes('+')) {
+  const terms = raw.split('+').map(t => t.trim()).filter(Boolean);
+  if (terms.length === 0) return escHtml(text);
+
+  const pattern = terms
+    .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+
+  const re = new RegExp(pattern, 'gi');
+
+  let result = '';
+  let last = 0;
+  let m;
+
+  while ((m = re.exec(text)) !== null) {
+    result += escHtml(text.slice(last, m.index));
+    result += `<span class="hl">${escHtml(m[0])}</span>`;
+    last = m.index + m[0].length;
+
+    if (m[0].length === 0) re.lastIndex++;
+  }
+
+  result += escHtml(text.slice(last));
   return result;
 }
 
@@ -828,9 +915,9 @@ for (const entry of contents) {
   row.className = 'list-row' + (isSelectedEntry(entry) ? ' selected' : '');
 
   const ft = entry.preferred_type ?? entry.type_default ?? -1;
-  const at = entry.type ?? -1;
-  const iconSvg = entry._isFolder ? getIconForCategory(ft) : getIconForItem(at);
-  const typeName = entry._isFolder ? getFolderTypeName(ft) : getAssetTypeName(at);
+  const tk = entry._typeKey || 'unknown';
+  const iconSvg = entry._isFolder ? getIconForCategory(ft) : getIconForItem(tk);
+  const typeName = entry._isFolder ? getFolderTypeName(ft) : getTypeKeyName(tk);
   const date = entry.creation_date ? formatDate(entry.creation_date) : '—';
   const countVal = entry._isFolder
     ? (() => { const c = countDescendantItems(entry._id); return c > 0 ? c.toLocaleString() : ''; })()
@@ -865,15 +952,13 @@ list.appendChild(frag);
 }
 
 // ── Texture detection ──────────────────────────────────────────
-// type field can be integer OR string (from JSON enrichment or raw parse)
-const TEXTURE_ASSET_TYPES_INT = new Set([0, 12, 18, 19]);
-const TEXTURE_ASSET_TYPES_STR = new Set(['texture', 'image_tga', 'image_jpeg', 'texture_tga']);
-
-function isTextureType(typeVal) {
-if (typeVal == null) return false;
-if (typeof typeVal === 'number') return TEXTURE_ASSET_TYPES_INT.has(typeVal);
-const s = String(typeVal).toLowerCase();
-return TEXTURE_ASSET_TYPES_INT.has(parseInt(s)) || TEXTURE_ASSET_TYPES_STR.has(s);
+// Uses _typeKey stamped at index time — single source of truth.
+// Snapshots are included: they are stored as texture assets and the
+// picture-service URL works for them when an asset_id is available.
+function isTextureType(itemOrKey) {
+  // Accept either a full item object or a bare _typeKey string
+  const key = (typeof itemOrKey === 'string') ? itemOrKey : (itemOrKey?._typeKey);
+  return key === 'texture' || key === 'snapshot';
 }
 
 function itemHasAssetId(item) {
@@ -895,7 +980,7 @@ return getFirstTextureInFolder(catId);
 
 function getFirstTextureInFolder(catId) {
 for (const item of (catItems[catId] || [])) {
-  if (isTextureType(item.type) && itemHasAssetId(item)) return item.asset_id;
+  if (isTextureType(item) && itemHasAssetId(item)) return item.asset_id;
 }
 for (const cid of (catChildren[catId] || [])) {
   const found = getFirstTextureInFolder(cid);
@@ -912,7 +997,7 @@ function buildLightboxList() {
   // Build ordered list of texture items from current view contents
   const contents = getSortedContents(currentCatId);
   lbTextureList = contents
-    .filter(e => !e._isFolder && isTextureType(e.type ?? -1) && itemHasAssetId(e))
+    .filter(e => !e._isFolder && isTextureType(e) && itemHasAssetId(e))
     .map(e => ({ assetId: e.asset_id, name: e.name || '' }));
 }
 
@@ -1155,14 +1240,14 @@ for (const entry of contents) {
   cell.className = 'icon-cell' + (isSelectedEntry(entry) ? ' selected' : '');
 
   const ft = entry.preferred_type ?? entry.type_default ?? -1;
-  const at = entry.type ?? -1;
-  const typeName = entry._isFolder ? getFolderTypeName(ft) : getAssetTypeName(at);
+  const tk = entry._typeKey || 'unknown';
+  const typeName = entry._isFolder ? getFolderTypeName(ft) : getTypeKeyName(tk);
 
   // ── Visual area ────────────────────────────────────────────
   if (entry._isFolder) {
     cell.appendChild(buildFolderThumbCell(entry));
 
-  } else if (isTextureType(at) && itemHasAssetId(entry)) {
+  } else if (isTextureType(entry) && itemHasAssetId(entry)) {
     // Texture item: thumbnail — lazy loaded via IntersectionObserver
     const thumbBox = document.createElement('div');
     thumbBox.className = 'thumb-box';
@@ -1186,7 +1271,7 @@ for (const entry of contents) {
     thumbBox.className = 'thumb-box';
     const iconDiv = document.createElement('div');
     iconDiv.className = 'thumb-icon';
-    const iconSvg = getIconForItem(at);
+    const iconSvg = getIconForItem(tk);
     iconDiv.innerHTML = iconSvg.replace(/width="16" height="16"/, 'width="38" height="38"');
     thumbBox.appendChild(iconDiv);
     cell.appendChild(thumbBox);
@@ -1221,7 +1306,7 @@ for (const entry of contents) {
   cell.addEventListener('dblclick', () => {
     if (entry._isFolder) {
       navigateTo(entry._id);
-    } else if (isTextureType(at) && itemHasAssetId(entry)) {
+    } else if (isTextureType(entry) && itemHasAssetId(entry)) {
       openLightbox(entry.asset_id, entry.name);
     }
   });
@@ -1383,10 +1468,10 @@ if (entry._isFolder) {
     </div>
   `;
 } else {
-  const at = entry.type ?? -1;
-  dsIcon.innerHTML = `<div style="width:32px;height:32px;">${getIconForItem(at)}</div>`;
+  const tk = entry._typeKey || 'unknown';
+  dsIcon.innerHTML = `<div style="width:32px;height:32px;">${getIconForItem(tk)}</div>`;
   dsName.textContent = entry.name || '(unnamed)';
-  dsType.textContent = getAssetTypeName(at);
+  dsType.textContent = getTypeKeyName(tk);
 
   const perm = entry.permissions || {};
   const base = decodePermMask(perm.base_mask);
@@ -1469,6 +1554,8 @@ const FILTER_GROUPS = [
   { key: 'landmark',     label: 'Landmarks',    icon: 'landmark'     },
   { key: 'sound',        label: 'Sounds',       icon: 'sound'        },
   { key: 'settings',     label: 'Settings',     icon: 'settings'     },
+  { key: 'material',     label: 'Materials',    icon: 'material'     },
+  { key: 'gltf',         label: 'GLTF',         icon: 'gltf'         },
   { key: 'texture',      label: 'Textures',     icon: 'texture'      },
   { key: 'calling_card', label: 'Calling Cards',icon: 'calling_card' },
   { key: 'snapshot',     label: 'Snapshots',    icon: 'snapshot'     },
@@ -1477,7 +1564,8 @@ const FILTER_GROUPS = [
   { key: 'clothing',     label: 'Clothing',     icon: 'clothing'     },
   { key: 'bodypart',     label: 'Body Parts',   icon: 'bodypart'     },
   { key: 'link',         label: 'Links',        icon: 'link'         },
-  { key: 'lost_found',   label: 'Lost & Found', icon: 'lost_found'   },
+  // lost_found is a system folder concept, not an item type — no items have this _typeKey
+  // { key: 'lost_found',   label: 'Lost & Found', icon: 'lost_found'   },
 ]},
 ];
 
@@ -1605,6 +1693,8 @@ const PARSE_FILTER_GROUPS = [
   { key: 'landmark',     label: 'Landmarks',    icon: 'landmark'     },
   { key: 'sound',        label: 'Sounds',       icon: 'sound'        },
   { key: 'settings',     label: 'Settings',     icon: 'settings'     },
+  { key: 'material',     label: 'Materials',    icon: 'material'     },
+  { key: 'gltf',         label: 'GLTF',         icon: 'gltf'         },
   { key: 'texture',      label: 'Textures',     icon: 'texture'      },
   { key: 'calling_card', label: 'Calling Cards',icon: 'calling_card' },
   { key: 'snapshot',     label: 'Snapshots',    icon: 'snapshot'     },
@@ -1616,27 +1706,6 @@ const PARSE_FILTER_GROUPS = [
 ]},
 ];
 
-// Maps parse filter key → LLSD type strings/ints to keep.
-// Must cover BOTH integer type codes AND all string variants seen in SL JSON exports.
-const PARSE_KEY_TO_TYPES = {
-category:     ['category', 8, 9],
-object:       ['object', 6],
-notecard:     ['notecard', 7],
-script:       ['lsl_text', 'lsl_bytecode', 'lsltext', 10, 11],
-mesh:         ['mesh', 50],
-animation:    ['animation', 'animatn', 20],
-gesture:      ['gesture', 21],
-landmark:     ['landmark', 3],
-sound:        ['sound', 1, 17],
-settings:     ['settings', 'material', 56, 57],
-texture:      ['texture', 'image_tga', 'image_jpeg', 0, 12, 18, 19],
-clothing:     ['clothing', 5],
-bodypart:     ['bodypart', 'body_part', 13],
-calling_card: ['calling_card', 'callcard', 2],
-snapshot:     ['snapshot', 15],
-link:         ['link', 45, 46],
-};
-
 let pendingFile = null;          // file waiting for modal confirm
 let parseFilterKeys = new Set(); // keys selected in modal; empty = load all
 let excludeSystemFolders = false;
@@ -1644,7 +1713,7 @@ let excludeSystemFolders = false;
 // preferred_type values that identify system/library folders to exclude
 const SYSTEM_FOLDER_TYPES = new Set([
   'bodypart', 'callcard', 'clothing', 'current', 'favorite',
-  'my_otfts', 'gesture', 'landmark', 'lstndfnd', 'material',
+  'my_otfts', 'gesture', 'landmark', 'lstndfnd',
   'notecard', 'snapshot', 'inbox', 'lsltext', 'settings',
   'sound', 'texture', 'trash', 'animatn', 'object',
 ]);
@@ -1742,13 +1811,11 @@ function applyParseFilter(data) {
 
   // ── Step 2: type filter ────────────────────────────────────
   if (parseFilterKeys.size > 0) {
-    const allowedTypes = new Set();
-    for (const key of parseFilterKeys) {
-      for (const t of (PARSE_KEY_TO_TYPES[key] || [])) allowedTypes.add(String(t));
-    }
     const keepCategories = parseFilterKeys.has('category');
     categories = keepCategories ? categories : [];
-    items = items.filter(item => allowedTypes.has(String(item.type ?? '')));
+    // resolveTypeKey gives the same canonical key that parseFilterKeys uses —
+    // no need for the multi-value PARSE_KEY_TO_TYPES expansion anymore.
+    items = items.filter(item => parseFilterKeys.has(resolveTypeKey(item)));
   }
 
   return { ...data, categories, items };
@@ -1850,8 +1917,15 @@ async function resumeSession() {
 
     document.getElementById('resume-banner').classList.add('hidden');
 
-    // Restore parse filter state from the saved snapshot
-    parseFilterKeys     = new Set(session.parseFilter || []);
+    // Restore parse filter state from the saved snapshot.
+    // Merge with current defaults so type keys added after the session was saved
+    // (e.g. 'material') are automatically included rather than silently dropped.
+    const savedKeys = new Set(session.parseFilter || []);
+    // If the saved set is empty it means "load all" — preserve that
+    if (savedKeys.size > 0) {
+      PARSE_FILTER_GROUPS.forEach(g => g.types.forEach(t => savedKeys.add(t.key)));
+    }
+    parseFilterKeys      = savedKeys;
     excludeSystemFolders = session.excludeSystem || false;
 
     // Feed the saved ArrayBuffer through the same parse path as a fresh .gz
@@ -2195,8 +2269,7 @@ document.addEventListener('keydown', e => {
     if (selectedIsFolder) {
       navigateTo(selectedItem._id);
     } else {
-      const at = selectedItem.type ?? -1;
-      if (isTextureType(at) && itemHasAssetId(selectedItem)) {
+      if (isTextureType(selectedItem) && itemHasAssetId(selectedItem)) {
         openLightbox(selectedItem.asset_id, selectedItem.name);
       }
     }
