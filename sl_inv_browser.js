@@ -424,6 +424,10 @@ expander.className = 'tree-expand';
 expander.innerHTML = hasChildren ? (isExpanded ? '▾' : '▸') : '';
 expander.addEventListener('click', e => { e.stopPropagation(); toggleExpand(catId); });
 
+// FIX: Icons for system folders do not show when folder is opened.
+//const icon = document.createElement('div');
+//icon.className = 'icon';
+//icon.innerHTML = isExpanded ? ICONS.folder_open : getIconForCategory(ft);
 const icon = document.createElement('div');
 icon.className = 'icon';
 const typedIcon = getIconForCategory(ft);
@@ -2137,6 +2141,20 @@ if (btn) {
 localStorage.setItem('sl_inv_detail_open', isHidden ? '1' : '0');
 }
 
+function toggleTreePane() {
+const panel   = document.getElementById('tree-panel');
+const resizer = document.getElementById('resizer');
+const btn     = document.getElementById('btn-toggle-tree');
+const isHidden = panel.classList.contains('collapsed');
+panel.classList.toggle('collapsed');
+resizer.classList.toggle('hidden');
+if (btn) {
+  btn.classList.toggle('active', !isHidden);
+  btn.textContent = isHidden ? '‹' : '›';
+}
+localStorage.setItem('sl_inv_tree_open', isHidden ? '1' : '0');
+}
+
 // ============================================================
 // Drag & drop
 // ============================================================
@@ -2177,6 +2195,17 @@ if (detailOpen === '0') {
 }
 
 document.getElementById('btn-toggle-detail').addEventListener('click', toggleDetailPane);
+
+// Restore tree pane state
+const treeOpen = localStorage.getItem('sl_inv_tree_open');
+if (treeOpen === '0') {
+  document.getElementById('tree-panel').classList.add('collapsed');
+  document.getElementById('resizer').classList.add('hidden');
+  const btn = document.getElementById('btn-toggle-tree');
+  if (btn) { btn.textContent = '›'; btn.classList.add('active'); }
+}
+
+document.getElementById('btn-toggle-tree').addEventListener('click', toggleTreePane);
 
 // Check for a saved session and show resume banner if found
 checkResumeBanner();
@@ -2288,6 +2317,12 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'd' || e.key === 'D') && !inInput) {
     e.preventDefault();
     toggleDetailPane();
+  }
+
+  // T = toggle tree pane
+  if ((e.key === 't' || e.key === 'T') && !inInput) {
+    e.preventDefault();
+    toggleTreePane();
   }
 
   // ? = keyboard shortcut overlay
