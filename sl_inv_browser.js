@@ -189,6 +189,7 @@ trash:        `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path
 calling_card: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="8" rx="1.5" fill="#9b6dff" opacity=".12" stroke="#9b6dff" stroke-width="1.2"/><circle cx="5.5" cy="7" r="1.2" fill="#9b6dff" opacity=".7"/><line x1="8" y1="6.5" x2="12" y2="6.5" stroke="#9b6dff" stroke-width="1" stroke-linecap="round" opacity=".5"/><line x1="8" y1="8.5" x2="10.5" y2="8.5" stroke="#9b6dff" stroke-width="1" stroke-linecap="round" opacity=".4"/></svg>`,
 lost_found:   `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" fill="#e8a630" opacity=".1" stroke="#e8a630" stroke-width="1.2"/><text x="8" y="11.5" text-anchor="middle" font-family="monospace" font-size="8" fill="#e8a630" font-weight="bold">?</text></svg>`,
 snapshot:     `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4" width="12" height="9" rx="1.2" fill="none" stroke="#3dba7f" stroke-width="1.2"/><circle cx="8" cy="8.5" r="2" stroke="#3dba7f" stroke-width="1.2"/><path d="M5.5 4l.8-1.5h3.4L10.5 4" stroke="#3dba7f" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+heart:        `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13.5C8 13.5 2 9.5 2 5.5A3.5 3.5 0 0 1 8 4.2 3.5 3.5 0 0 1 14 5.5C14 9.5 8 13.5 8 13.5Z" fill="#e85585" opacity=".85" stroke="#e85585" stroke-width=".6" stroke-linejoin="round"/></svg>`,
 link:         `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5a3 3 0 0 0 4.2.1l1.8-1.8a3 3 0 0 0-4.2-4.2L7.2 4.7" stroke="#4a9eff" stroke-width="1.3" stroke-linecap="round" opacity=".7"/><path d="M9.5 6.5a3 3 0 0 0-4.2-.1L3.5 8.2a3 3 0 0 0 4.2 4.2l1.1-1.1" stroke="#4a9eff" stroke-width="1.3" stroke-linecap="round"/></svg>`,
 unknown:      `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="#5a6a80" stroke-width="1.2"/><text x="8" y="11" text-anchor="middle" font-family="monospace" font-size="8" fill="#5a6a80">?</text></svg>`,
 };
@@ -215,7 +216,7 @@ const FOLDER_TYPE_STR_MAP = {
   'mesh':'mesh',           'meshes':'mesh',
   'settings':'settings',   'material':'material',   'gltf':'gltf',
   'inbox':'notecard',
-  'favorite':'landmark',   'favorites':'landmark',
+  'favorite':'heart',   'favorites':'heart',
   'my_otfts':'clothing',   'current':'clothing',
 };
 
@@ -1214,8 +1215,8 @@ if (thumbAssetId) {
       <svg viewBox="0 0 100 80" width="100" height="80" xmlns="http://www.w3.org/2000/svg">
         <path d="M4 22 Q4 16 10 16 L34 16 Q38 16 40 20 L46 28 L96 28 Q98 28 98 30 L98 76 Q98 78 96 78 L4 78 Q2 78 2 76 L2 24 Q2 22 4 22 Z"
           fill="#1e2e44" stroke="#4a9eff" stroke-width="1.8" opacity="0.6"/>
-        <foreignObject x="28" y="20" width="44" height="44">
-          ${typedIconSvg.replace(/width="16" height="16"/, 'width="44" height="44"')}
+        <foreignObject x="29" y="30" width="38" height="38">
+          ${typedIconSvg.replace(/width="16" height="16"/, 'width="38" height="38"')}
         </foreignObject>
       </svg>`;
   } else {
