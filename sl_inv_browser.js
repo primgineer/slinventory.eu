@@ -426,7 +426,8 @@ expander.addEventListener('click', e => { e.stopPropagation(); toggleExpand(catI
 
 const icon = document.createElement('div');
 icon.className = 'icon';
-icon.innerHTML = isExpanded ? ICONS.folder_open : getIconForCategory(ft);
+const typedIcon = getIconForCategory(ft);
+icon.innerHTML = (isExpanded && typedIcon === ICONS.folder) ? ICONS.folder_open : typedIcon;
 
 const label = document.createElement('div');
 label.className = 'tree-node-label';
