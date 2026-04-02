@@ -2141,6 +2141,7 @@ if (btn) {
 localStorage.setItem('sl_inv_detail_open', isHidden ? '1' : '0');
 }
 
+// FIX: Changed !isHidden to isHidden
 function toggleTreePane() {
 const panel   = document.getElementById('tree-panel');
 const resizer = document.getElementById('resizer');
@@ -2149,7 +2150,7 @@ const isHidden = panel.classList.contains('collapsed');
 panel.classList.toggle('collapsed');
 resizer.classList.toggle('hidden');
 if (btn) {
-  btn.classList.toggle('active', !isHidden);
+  btn.classList.toggle('active', isHidden);
   btn.textContent = isHidden ? '‹' : '›';
 }
 localStorage.setItem('sl_inv_tree_open', isHidden ? '1' : '0');
@@ -2197,12 +2198,13 @@ if (detailOpen === '0') {
 document.getElementById('btn-toggle-detail').addEventListener('click', toggleDetailPane);
 
 // Restore tree pane state
+// FIX: Removed btn.classList.add('active'); 
 const treeOpen = localStorage.getItem('sl_inv_tree_open');
 if (treeOpen === '0') {
   document.getElementById('tree-panel').classList.add('collapsed');
   document.getElementById('resizer').classList.add('hidden');
   const btn = document.getElementById('btn-toggle-tree');
-  if (btn) { btn.textContent = '›'; btn.classList.add('active'); }
+  if (btn) { btn.textContent = '›'; /* btn.classList.add('active'); */ }
 }
 
 document.getElementById('btn-toggle-tree').addEventListener('click', toggleTreePane);
@@ -2479,4 +2481,31 @@ if (!isNaN(savedIconSize)) {
   applyIconSize(savedIconSize);
   document.getElementById('icon-size-slider').value = savedIconSize;
 }
+
+// Sync toggle arrow highlights with pane visibility on load
+function syncToggleButtons() {
+    const treeSide = document.getElementById('tree-side');
+    const detailSide = document.getElementById('detail-side');
+    const btnTree = document.getElementById('btn-toggle-tree');
+    const btnDetail = document.getElementById('btn-toggle-detail');
+
+    if (treeSide && btnTree) {
+        // In your app, a pane is expanded if it does NOT have the 'hidden' class
+        const isTreeExpanded = !treeSide.classList.contains('hidden');
+        btnTree.classList.toggle('active', isTreeExpanded);
+    }
+
+    if (detailSide && btnDetail) {
+        const isDetailExpanded = !detailSide.classList.contains('hidden');
+        btnDetail.classList.toggle('active', isDetailExpanded);
+    }
+}
+// Ensure the DOM is ready before running
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', syncToggleButtons);
+} else {
+    syncToggleButtons();
+}
+
 });
+
