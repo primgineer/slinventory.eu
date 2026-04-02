@@ -1,3 +1,4 @@
+
 // ============================================================
 // LLSD Binary Parser (JS port)
 // ============================================================
@@ -444,6 +445,7 @@ if (childCount > 0) cnt.textContent = childCount;
 row.append(expander, icon, label, cnt);
 row.addEventListener('click', () => navigateTo(catId));
 row.addEventListener('dblclick', () => { toggleExpand(catId); navigateTo(catId); });
+addContextMenu(row, { _isFolder: true, _id: catId, name: cat.name, cat_id: cat.cat_id, category_id: cat.category_id });
 node.appendChild(row);
 
 if (isExpanded && hasChildren) {
@@ -950,6 +952,7 @@ for (const entry of contents) {
     updateStatus();
   });
   row.addEventListener('dblclick', () => { if (entry._isFolder) navigateTo(entry._id); });
+  addContextMenu(row, entry);
   frag.appendChild(row);
 }
 list.appendChild(frag);
@@ -1316,6 +1319,7 @@ for (const entry of contents) {
     }
   });
 
+  addContextMenu(cell, entry);
   grid.appendChild(cell);
 }
 
@@ -2157,6 +2161,70 @@ localStorage.setItem('sl_inv_tree_open', isHidden ? '1' : '0');
 }
 
 // ============================================================
+// Context menu
+// ============================================================
+let _ctxEntry = null; // the entry the menu was opened on
+
+function showContextMenu(e, entry) {
+  e.preventDefault();
+  e.stopPropagation();
+  _ctxEntry = entry;
+
+  const menu = document.getElementById('ctx-menu');
+  const copyId = document.getElementById('ctx-copy-id');
+
+  // Update label to reflect folder vs item
+  copyId.textContent = entry._isFolder ? 'Copy Folder ID' : 'Copy Item ID';
+
+  // Position — keep menu inside viewport
+  const menuW = 190, menuH = 68; // approx
+  const x = Math.min(e.clientX, window.innerWidth  - menuW - 8);
+  const y = Math.min(e.clientY, window.innerHeight - menuH - 8);
+  menu.style.left = x + 'px';
+  menu.style.top  = y + 'px';
+  menu.classList.remove('hidden');
+}
+
+function hideContextMenu() {
+  document.getElementById('ctx-menu').classList.add('hidden');
+  _ctxEntry = null;
+}
+
+function initContextMenu() {
+  const menu     = document.getElementById('ctx-menu');
+  const copyName = document.getElementById('ctx-copy-name');
+  const copyId   = document.getElementById('ctx-copy-id');
+
+  copyName.addEventListener('click', () => {
+    if (!_ctxEntry) return;
+    navigator.clipboard.writeText(_ctxEntry.name || '').catch(() => {});
+    hideContextMenu();
+  });
+
+  copyId.addEventListener('click', () => {
+    if (!_ctxEntry) return;
+    const id = _ctxEntry._isFolder
+      ? (_ctxEntry.cat_id || _ctxEntry.category_id || _ctxEntry._id || '')
+      : (_ctxEntry.item_id || _ctxEntry.id || '');
+    navigator.clipboard.writeText(id).catch(() => {});
+    hideContextMenu();
+  });
+
+  // Dismiss on click outside or Escape
+  document.addEventListener('click', e => {
+    if (!menu.classList.contains('hidden') && !menu.contains(e.target)) hideContextMenu();
+  }, { capture: true });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') hideContextMenu();
+  });
+}
+
+// Attach contextmenu listener to an entry element
+function addContextMenu(el, entry) {
+  el.addEventListener('contextmenu', e => showContextMenu(e, entry));
+}
+
+// ============================================================
 // Drag & drop
 // ============================================================
 function initDrop() {
@@ -2185,6 +2253,7 @@ initDrop();
 initResizer('resizer', 'tree-panel');
 initResizer('resizer2', 'detail-panel');
 initDetailResizer();
+initContextMenu();
 
 // Restore detail pane state
 const detailOpen = localStorage.getItem('sl_inv_detail_open');
