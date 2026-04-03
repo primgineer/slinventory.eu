@@ -266,6 +266,34 @@ function getTypeKeyName(typeKey) {
 }
 
 // ============================================================
+// Natural sort comparator
+// Splits strings into alternating text/number chunks so that
+// embedded integers are compared numerically, matching the
+// order used by the Second Life viewer.
+// e.g. "Item 9" < "Item 21" < "Item 100"
+// ============================================================
+function naturalCompare(a, b) {
+  const re = /(\d+)|(\D+)/g;
+  const chunksA = String(a).toLowerCase().match(re) || [];
+  const chunksB = String(b).toLowerCase().match(re) || [];
+  const len = Math.max(chunksA.length, chunksB.length);
+  for (let i = 0; i < len; i++) {
+    if (i >= chunksA.length) return -1;
+    if (i >= chunksB.length) return  1;
+    const ca = chunksA[i], cb = chunksB[i];
+    const na = /^\d+$/.test(ca), nb = /^\d+$/.test(cb);
+    if (na && nb) {
+      const diff = parseInt(ca, 10) - parseInt(cb, 10);
+      if (diff !== 0) return diff;
+    } else {
+      if (ca < cb) return -1;
+      if (ca > cb) return  1;
+    }
+  }
+  return 0;
+}
+
+// ============================================================
 // Inventory data model
 // ============================================================
 let invData = null;         // raw parsed JSON {categories:[], items:[]}
@@ -358,13 +386,11 @@ for (const item of (data.items || [])) {
   if (pid && catItems[pid]) catItems[pid].push(item);
 }
 
-// Sort children alphabetically by name
+// Sort children by name using natural sort (numbers compared numerically)
 for (const id in catChildren) {
-  catChildren[id].sort((a, b) => {
-    const na = (catMap[a]?.name || '').toLowerCase();
-    const nb = (catMap[b]?.name || '').toLowerCase();
-    return na < nb ? -1 : na > nb ? 1 : 0;
-  });
+  catChildren[id].sort((a, b) =>
+    naturalCompare(catMap[a]?.name || '', catMap[b]?.name || '')
+  );
 }
 
 // Build flat search index — one pass, done once
@@ -759,9 +785,9 @@ if (folders.length === 0 && its.length === 0) {
 }
 
 const sortFn = (a, b) => {
+  if (sortKey === 'name') { return sortAsc ? naturalCompare(a.name||'', b.name||'') : naturalCompare(b.name||'', a.name||''); }
   let va, vb;
-  if (sortKey === 'name') { va = (a.name||'').toLowerCase(); vb = (b.name||'').toLowerCase(); }
-  else if (sortKey === 'type') {
+  if (sortKey === 'type') {
     va = a._isFolder ? 'folder' : getTypeKeyName(a._typeKey || 'unknown');
     vb = b._isFolder ? 'folder' : getTypeKeyName(b._typeKey || 'unknown');
   }
