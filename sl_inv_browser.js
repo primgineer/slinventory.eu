@@ -1371,14 +1371,45 @@ for (const entry of contents) {
     cell.appendChild(thumbBox);
 
   } else {
-    // Other item type: scaled SVG icon in a box
+    // Other item type: show thumbnail if available via entry.thumbnail.asset_id,
+    // otherwise fall back to scaled SVG icon in a box
     const thumbBox = document.createElement('div');
     thumbBox.className = 'thumb-box';
-    const iconDiv = document.createElement('div');
-    iconDiv.className = 'thumb-icon';
     const iconSvg = getIconForItem(tk);
-    iconDiv.innerHTML = iconSvg.replace(/width="16" height="16"/, 'width="38" height="38"');
-    thumbBox.appendChild(iconDiv);
+
+    const objThumbId = entry.thumbnail?.asset_id &&
+      entry.thumbnail.asset_id !== '00000000-0000-0000-0000-000000000000'
+      ? entry.thumbnail.asset_id : null;
+
+    if (objThumbId) {
+      // Show type icon as spinner/placeholder while thumbnail loads
+      const spinWrap = document.createElement('div');
+      spinWrap.className = 'thumb-icon';
+      spinWrap.innerHTML = iconSvg.replace(/width="16" height="16"/, 'width="38" height="38"');
+      thumbBox.appendChild(spinWrap);
+
+      const img = document.createElement('img');
+      img.alt = '';
+      // Hide spinner once image loads, hide img on error (icon stays visible)
+      img.addEventListener('load', () => {
+        img.classList.add('loaded');
+        thumbBox.classList.add('img-loaded');
+        spinWrap.style.display = 'none';
+      }, { once: true });
+      img.addEventListener('error', () => {
+        img.style.display = 'none';
+        spinWrap.style.display = '';
+      }, { once: true });
+      thumbBox.appendChild(img);
+
+      observeThumb(thumbBox, objThumbId, 'texture');
+    } else {
+      const iconDiv = document.createElement('div');
+      iconDiv.className = 'thumb-icon';
+      iconDiv.innerHTML = iconSvg.replace(/width="16" height="16"/, 'width="38" height="38"');
+      thumbBox.appendChild(iconDiv);
+    }
+
     cell.appendChild(thumbBox);
   }
 
@@ -1611,8 +1642,13 @@ if (entry._isFolder) {
     </div>
   ` : '';
 
-  // Texture/snapshot preview section in detail pane
+  // Thumbnail preview: textures/snapshots use asset_id directly;
+  // other item types (e.g. objects) may carry a thumbnail.asset_id.
   const isViewable = isTextureType(entry) && itemHasAssetId(entry);
+  const objThumbId = !isViewable && entry.thumbnail?.asset_id &&
+    entry.thumbnail.asset_id !== '00000000-0000-0000-0000-000000000000'
+    ? entry.thumbnail.asset_id : null;
+
   const previewSection = isViewable ? `
     <div class="detail-group">
       <div class="dg-label">Preview</div>
@@ -1625,8 +1661,19 @@ if (entry._isFolder) {
     </div>
   ` : '';
 
+  const objThumbSection = objThumbId ? `
+    <div class="detail-group">
+      <div class="dg-label">Thumbnail</div>
+      <div style="width:100%;aspect-ratio:4/3;background:var(--bg-3);border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+        <img src="${thumbUrl(objThumbId)}" style="width:100%;height:100%;object-fit:contain;display:block;" alt=""
+          onerror="this.style.display='none'" />
+      </div>
+    </div>
+  ` : '';
+
   dsBody.innerHTML = `
     ${previewSection}
+    ${objThumbSection}
     ${dateSection}
     <div class="detail-group">
       <div class="dg-label">Item ID</div>
