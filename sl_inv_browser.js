@@ -467,7 +467,7 @@ renderTree();
 // ============================================================
 // Detail panel (content list)
 // ============================================================
-function navigateTo(catId, pushHistory = true) {
+function navigateTo(catId, pushHistory = true, selectFolderId = null) {
 const cat = catMap[catId];
 if (!cat) return;
 currentCatId = catId;
@@ -495,9 +495,31 @@ renderContentList();
 updateDetailSide(null);
 updateStatus();
 
+// If we navigated back from a child folder, select and scroll to it
+if (selectFolderId && catMap[selectFolderId]) {
+  const folderEntry = { _isFolder: true, _id: selectFolderId, ...catMap[selectFolderId] };
+  const contents = getSortedContents(catId);
+  const idx = contents.findIndex(e => e._isFolder && e._id === selectFolderId);
+  if (idx !== -1) {
+    selectedItem = folderEntry;
+    selectedIsFolder = true;
+    selectedIndex = idx;
+    // Apply .selected class to the rendered element
+    const listEl = document.getElementById('content-list');
+    if (listEl) {
+      const rows = listEl.querySelectorAll('.list-row, .icon-cell');
+      if (rows[idx]) rows[idx].classList.add('selected');
+    }
+    updateDetailSide(folderEntry);
+    updateStatus();
+  }
+}
+
 setTimeout(() => {
-  const sel = document.querySelector('.tree-node-row.selected');
-  if (sel) sel.scrollIntoView({ block: 'nearest' });
+  const sel = document.querySelector('.list-row.selected, .icon-cell.selected');
+  if (sel) { sel.scrollIntoView({ block: 'nearest' }); return; }
+  const treeSel = document.querySelector('.tree-node-row.selected');
+  if (treeSel) treeSel.scrollIntoView({ block: 'nearest' });
 }, 0);
 }
 
@@ -551,7 +573,8 @@ if (indices) {
     const el = document.createElement('span');
     el.className = 'bc-item' + (i === last ? ' current' : '');
     el.textContent = stack[i].name;
-    if (i < last) el.addEventListener('click', () => navigateTo(stack[i].id));
+    // When clicking an ancestor, the folder to select on arrival is stack[i+1]
+    if (i < last) el.addEventListener('click', () => navigateTo(stack[i].id, true, stack[i + 1].id));
     bc.appendChild(el);
   });
 } else {
@@ -560,7 +583,7 @@ if (indices) {
     const el = document.createElement('span');
     el.className = 'bc-item' + (i === last ? ' current' : '');
     el.textContent = stack[i].name;
-    if (i < last) el.addEventListener('click', () => navigateTo(stack[i].id));
+    if (i < last) el.addEventListener('click', () => navigateTo(stack[i].id, true, stack[i + 1].id));
     return el;
   };
   const sep = () => { const s = document.createElement('span'); s.className='bc-sep'; s.textContent='›'; return s; };
@@ -581,11 +604,13 @@ if (indices) {
   if (_bcExpandMenuDismiss) {
     document.removeEventListener('click', _bcExpandMenuDismiss, { capture: true });
   }
-  stack.slice(1, last).forEach((item) => {
+  stack.slice(1, last).forEach((item, ii) => {
     const opt = document.createElement('div');
     opt.className = 'bc-expand-opt';
     opt.textContent = item.name;
-    opt.addEventListener('click', e => { e.stopPropagation(); expandMenu.classList.add('hidden'); navigateTo(item.id); });
+    // ii+1 is the index in the full stack for this item; the next item is at ii+2
+    const nextId = stack[ii + 2] ? stack[ii + 2].id : null;
+    opt.addEventListener('click', e => { e.stopPropagation(); expandMenu.classList.add('hidden'); navigateTo(item.id, true, nextId); });
     expandMenu.appendChild(opt);
   });
   collapse.addEventListener('click', e => {
@@ -2332,7 +2357,10 @@ document.addEventListener('keydown', e => {
   // Backspace = go up one folder
   if (e.key === 'Backspace' && !inInput) {
     e.preventDefault();
-    if (navStack.length >= 2) navigateTo(navStack[navStack.length - 2].id);
+    if (navStack.length >= 2) {
+      const fromId = currentCatId;
+      navigateTo(navStack[navStack.length - 2].id, true, fromId);
+    }
     return;
   }
 
