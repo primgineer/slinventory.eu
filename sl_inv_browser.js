@@ -2195,14 +2195,24 @@ function showContextMenu(e, entry) {
   e.stopPropagation();
   _ctxEntry = entry;
 
-  const menu = document.getElementById('ctx-menu');
-  const copyId = document.getElementById('ctx-copy-id');
+  const menu       = document.getElementById('ctx-menu');
+  const copyId     = document.getElementById('ctx-copy-id');
+  const openLoc    = document.getElementById('ctx-open-location');
 
-  // Update label to reflect folder vs item
-  copyId.textContent = entry._isFolder ? 'Copy Folder ID' : 'Copy Item ID';
+  // Dynamic labels
+  copyId.textContent  = entry._isFolder ? 'Copy Folder ID' : 'Copy Item ID';
+  openLoc.textContent = entry._isFolder ? 'Open Folder Location' : 'Open File Location';
+
+  // Disable "Open Location" if there's no navigable parent
+  // (e.g. right-clicking the root itself from the tree — parent_id would be null/root)
+  const parentId = entry._isFolder
+    ? (catMap[entry._id || entry.cat_id]?.parent_id)
+    : entry.parent_id;
+  const hasParent = parentId && catMap[parentId];
+  openLoc.classList.toggle('disabled', !hasParent);
 
   // Position — keep menu inside viewport
-  const menuW = 190, menuH = 68; // approx
+  const menuW = 200, menuH = 96;
   const x = Math.min(e.clientX, window.innerWidth  - menuW - 8);
   const y = Math.min(e.clientY, window.innerHeight - menuH - 8);
   menu.style.left = x + 'px';
@@ -2219,6 +2229,7 @@ function initContextMenu() {
   const menu     = document.getElementById('ctx-menu');
   const copyName = document.getElementById('ctx-copy-name');
   const copyId   = document.getElementById('ctx-copy-id');
+  const openLoc  = document.getElementById('ctx-open-location');
 
   copyName.addEventListener('click', () => {
     if (!_ctxEntry) return;
@@ -2233,6 +2244,39 @@ function initContextMenu() {
       : (_ctxEntry.item_id || _ctxEntry.id || '');
     navigator.clipboard.writeText(id).catch(() => {});
     hideContextMenu();
+  });
+
+  openLoc.addEventListener('click', () => {
+    if (!_ctxEntry || openLoc.classList.contains('disabled')) return;
+
+    const entry = _ctxEntry;
+    hideContextMenu();
+
+    // Resolve parent folder and the ID to select on arrival
+    const parentId  = entry._isFolder
+      ? (catMap[entry._id || entry.cat_id]?.parent_id)
+      : entry.parent_id;
+    const selectId  = entry._isFolder
+      ? (entry._id || entry.cat_id)
+      : null; // items don't appear as rows in content list by folder-id; select by item
+
+    if (!parentId || !catMap[parentId]) return;
+
+    if (entry._isFolder) {
+      // Navigate to parent and select the folder
+      navigateTo(parentId, true, selectId);
+    } else {
+      // Navigate to parent, then select the item row
+      navigateTo(parentId, true, null);
+      // Select the item after render (reuse selectEntry which handles items)
+      setTimeout(() => {
+        const contents = getSortedContents(parentId);
+        const idx = contents.findIndex(e =>
+          !e._isFolder && (e.item_id || e.id) === (entry.item_id || entry.id)
+        );
+        if (idx !== -1) selectEntry(contents[idx], idx);
+      }, 0);
+    }
   });
 
   // Dismiss on click outside or Escape
