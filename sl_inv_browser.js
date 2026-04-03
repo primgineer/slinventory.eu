@@ -1042,7 +1042,13 @@ for (const entry of contents) {
     updateDetailSide(entry);
     updateStatus();
   });
-  row.addEventListener('dblclick', () => { if (entry._isFolder) navigateTo(entry._id); });
+  row.addEventListener('dblclick', () => {
+    if (entry._isFolder) {
+      navigateTo(entry._id);
+    } else if (isTextureType(entry) && itemHasAssetId(entry)) {
+      openLightbox(entry.asset_id, entry.name);
+    }
+  });
   addContextMenu(row, entry);
   frag.appendChild(row);
 }
@@ -1605,7 +1611,22 @@ if (entry._isFolder) {
     </div>
   ` : '';
 
+  // Texture/snapshot preview section in detail pane
+  const isViewable = isTextureType(entry) && itemHasAssetId(entry);
+  const previewSection = isViewable ? `
+    <div class="detail-group">
+      <div class="dg-label">Preview</div>
+      <div class="ds-thumb-wrap" data-asset-id="${escHtml(entry.asset_id)}" title="Click to view full size" style="cursor:pointer;width:100%;aspect-ratio:4/3;background:var(--bg-3);border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;">
+        <img src="${thumbUrl(entry.asset_id)}" style="width:100%;height:100%;object-fit:contain;display:block;" alt="" />
+        <div class="ds-thumb-overlay" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;background:rgba(0,0,0,.35);transition:opacity .15s;border-radius:6px;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" fill="rgba(0,0,0,.5)"/><path d="M8 12h8M12 8v8" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+      </div>
+    </div>
+  ` : '';
+
   dsBody.innerHTML = `
+    ${previewSection}
     ${dateSection}
     <div class="detail-group">
       <div class="dg-label">Item ID</div>
@@ -1633,6 +1654,19 @@ if (entry._isFolder) {
       </div>`;
     })()}
   `;
+
+  // Wire up preview thumbnail click → lightbox
+  if (isViewable) {
+    const thumbWrap = dsBody.querySelector('.ds-thumb-wrap');
+    const overlay   = dsBody.querySelector('.ds-thumb-overlay');
+    if (thumbWrap) {
+      thumbWrap.addEventListener('click', () => openLightbox(entry.asset_id, entry.name));
+      if (overlay) {
+        thumbWrap.addEventListener('mouseenter', () => overlay.style.opacity = '1');
+        thumbWrap.addEventListener('mouseleave', () => overlay.style.opacity = '0');
+      }
+    }
+  }
 }
 }
 
