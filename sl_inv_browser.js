@@ -1074,13 +1074,30 @@ return id && id !== '00000000-0000-0000-0000-000000000000';
 
 // Priority for folder thumbnail:
 // 1. folder.thumbnail.asset_id  (explicit thumbnail set by user in viewer)
-// 2. first texture item found recursively inside
+// 2. first texture whose name contains "ad" or "vendor" (case-insensitive)
+// 3. first texture item found recursively inside
 function getFolderThumbAssetId(catId) {
 const cat = catMap[catId];
 if (cat?.thumbnail?.asset_id && cat.thumbnail.asset_id !== '00000000-0000-0000-0000-000000000000') {
   return cat.thumbnail.asset_id;
 }
-return getFirstTextureInFolder(catId);
+return getAdVendorTextureInFolder(catId) || getFirstTextureInFolder(catId);
+}
+
+function isAdVendorTextureName(name) {
+  const lower = (name || '').toLowerCase();
+  return lower.includes('ad') || lower.includes('vendor');
+}
+
+function getAdVendorTextureInFolder(catId) {
+for (const item of (catItems[catId] || [])) {
+  if (isTextureType(item) && itemHasAssetId(item) && isAdVendorTextureName(item.name)) return item.asset_id;
+}
+for (const cid of (catChildren[catId] || [])) {
+  const found = getAdVendorTextureInFolder(cid);
+  if (found) return found;
+}
+return null;
 }
 
 function getFirstTextureInFolder(catId) {
