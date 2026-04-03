@@ -356,6 +356,25 @@ const ratio = 0.8; // height:width ratio for folder shape
 document.documentElement.style.setProperty('--icon-sz-h', Math.round(sz * ratio) + 'px');
 }
 
+// ============================================================
+// System folder detection
+// ============================================================
+// A "system folder" is a direct child of the root ("My Inventory") whose
+// preferred_type is something other than "-1" (regular folder) or "outfit"
+// (My Outfits sub-folders, which are user-created outfit entries).
+// These are the well-known SL top-level folders: Animations, Body Parts,
+// Calling Cards, Clothing, Current Outfit, Favorites, Gestures, Landmarks,
+// Lost And Found, Materials, Notecards, Objects, Outfits(My Outfits),
+// Photo Album, Scripts, Settings, Sounds, Textures, Trash, etc.
+function isSystemFolder(catId) {
+  const cat = catMap[catId];
+  if (!cat) return false;
+  // Must be a direct child of root
+  if (cat.parent_id !== rootCatId) return false;
+  const pt = String(cat.preferred_type ?? '-1').toLowerCase();
+  return pt !== '-1' && pt !== 'outfit';
+}
+
 function buildIndex(data) {
 catMap = {}; catChildren = {}; catItems = {};
 rootCatId = null;
@@ -391,6 +410,16 @@ for (const id in catChildren) {
   catChildren[id].sort((a, b) =>
     naturalCompare(catMap[a]?.name || '', catMap[b]?.name || '')
   );
+}
+
+// Re-sort direct children of root: system folders first, then regular folders (alphabetical within each group)
+if (rootCatId && catChildren[rootCatId]) {
+  catChildren[rootCatId].sort((a, b) => {
+    const sa = isSystemFolder(a);
+    const sb = isSystemFolder(b);
+    if (sa !== sb) return sa ? -1 : 1;
+    return naturalCompare(catMap[a]?.name || '', catMap[b]?.name || '');
+  });
 }
 
 // Build flat search index — one pass, done once
@@ -806,7 +835,18 @@ const sortFn = (a, b) => {
 
 folders.sort(sortFn);
 its.sort(sortFn);
-const result = [...folders, ...its];
+
+// When browsing the root folder (not searching), pin system folders before
+// regular folders — mirroring SL viewer behavior. Within each group the
+// active sortFn still applies so column-header sorting is respected.
+let result;
+if (!searchQuery && currentCatId === rootCatId && folders.length > 0) {
+  const sysFolders = folders.filter(f => isSystemFolder(f._id));
+  const regFolders = folders.filter(f => !isSystemFolder(f._id));
+  result = [...sysFolders, ...regFolders, ...its];
+} else {
+  result = [...folders, ...its];
+}
 
 if (searchQuery) _searchCache = { key: _searchCacheKey(), result: result };
 return result;
