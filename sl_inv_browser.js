@@ -294,6 +294,284 @@ function naturalCompare(a, b) {
 }
 
 // ============================================================
+// ── TAB SYSTEM ──────────────────────────────────────────────
+// Folder tabs — right-click any folder → "Open in New Tab".
+//
+// FEATURE TOGGLE: set TABS_ENABLED = false to fully disable.
+// When false: tab bar stays hidden, context menu item is absent,
+// zero runtime overhead. No other code is affected.
+//
+// TO REMOVE ENTIRELY: delete this whole section (search for
+// "── TAB SYSTEM ──" / "── END TAB SYSTEM ──"), remove #tab-bar
+// HTML, remove ctx-tab-sep + ctx-open-new-tab HTML elements,
+// remove btn-tabs-toggle HTML, remove tab CSS block in <style>.
+// ============================================================
+const TabManager = (() => {
+  // ── Feature flag ─────────────────────────────────────────
+  // Default on; persisted per user in localStorage.
+  let TABS_ENABLED = localStorage.getItem('sl_inv_tabs_enabled') !== 'false';
+
+  // ── Internal state ────────────────────────────────────────
+  let _tabs = [];          // [{id, catId, navStack, label, scrollTop}]
+  let _activeId = null;    // id of active tab
+  let _nextId = 1;
+
+  // ── Helpers ───────────────────────────────────────────────
+  function _uid() { return _nextId++; }
+
+  function _labelFor(catId) {
+    if (!catId || !catMap) return '…';
+    const cat = catMap[catId];
+    return cat ? (cat.name || '(unnamed)') : '…';
+  }
+
+  // Folder SVG icon for tabs (small, monochrome)
+  function _folderIcon() {
+    return `<svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+      <path d="M1 4a1 1 0 0 1 1-1h4l1.5 1.5H14a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4z"
+        fill="currentColor" opacity=".7"/>
+    </svg>`;
+  }
+
+  // ── Tab bar render ────────────────────────────────────────
+  function _render() {
+    const bar = document.getElementById('tab-bar');
+    if (!bar) return;
+
+    if (!TABS_ENABLED || _tabs.length < 2) {
+      bar.classList.add('hidden');
+      return;
+    }
+    bar.classList.remove('hidden');
+
+    // Remove existing tab items (keep #tab-bar-new-btn at the end)
+    bar.querySelectorAll('.tab-item').forEach(el => el.remove());
+
+    const newBtn = document.getElementById('tab-bar-new-btn');
+
+    _tabs.forEach(tab => {
+      const el = document.createElement('div');
+      el.className = 'tab-item' + (tab.id === _activeId ? ' active' : '');
+      el.setAttribute('role', 'tab');
+      el.setAttribute('aria-selected', tab.id === _activeId ? 'true' : 'false');
+      el.title = tab.label;
+
+      el.innerHTML = `${_folderIcon()}<span class="tab-label">${_escHtml(tab.label)}</span>`;
+
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'tab-close';
+      closeBtn.title = 'Close tab';
+      closeBtn.setAttribute('aria-label', 'Close tab');
+      closeBtn.textContent = '✕';
+      closeBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        _closeTab(tab.id);
+      });
+      el.appendChild(closeBtn);
+
+      el.addEventListener('click', () => _activateTab(tab.id));
+
+      // Middle-click closes
+      el.addEventListener('mousedown', e => {
+        if (e.button === 1) { e.preventDefault(); _closeTab(tab.id); }
+      });
+
+      bar.insertBefore(el, newBtn);
+    });
+  }
+
+  function _escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ── Capture current browse state into the active tab ──────
+  function _saveActiveTab() {
+    if (!_activeId) return;
+    const tab = _tabs.find(t => t.id === _activeId);
+    if (!tab) return;
+    tab.catId    = currentCatId;
+    tab.navStack = navStack.slice();
+    tab.label    = _labelFor(currentCatId);
+    // Capture scroll position
+    const cl = document.getElementById('content-list');
+    if (cl) tab.scrollTop = cl.scrollTop;
+  }
+
+  // ── Activate a tab ────────────────────────────────────────
+  function _activateTab(tabId) {
+    if (tabId === _activeId) return;
+
+    _saveActiveTab();
+
+    _activeId = tabId;
+    const tab = _tabs.find(t => t.id === tabId);
+    if (!tab) return;
+
+    // Restore state
+    currentCatId = tab.catId;
+    navStack = tab.navStack.slice();
+
+    _render();
+
+    // Re-render the browse view without pushing history (state is already set)
+    renderTree();
+    renderBreadcrumb();
+    renderContentList();
+    updateDetailSide(null);
+    updateStatus();
+
+    // Restore scroll
+    requestAnimationFrame(() => {
+      const cl = document.getElementById('content-list');
+      if (cl) cl.scrollTop = tab.scrollTop || 0;
+    });
+  }
+
+  // ── Close a tab ───────────────────────────────────────────
+  function _closeTab(tabId) {
+    const idx = _tabs.findIndex(t => t.id === tabId);
+    if (idx === -1) return;
+
+    const wasActive = tabId === _activeId;
+    _tabs.splice(idx, 1);
+
+    if (_tabs.length === 0) {
+      _activeId = null;
+      _render();
+      return;
+    }
+
+    if (wasActive) {
+      // Activate the tab to the left, or the first one
+      const nextTab = _tabs[Math.max(0, idx - 1)];
+      _activeId = nextTab.id;
+
+      // Restore the newly-active tab's state
+      const tab = _tabs.find(t => t.id === _activeId);
+      if (tab) {
+        currentCatId = tab.catId;
+        navStack = tab.navStack.slice();
+        renderTree();
+        renderBreadcrumb();
+        renderContentList();
+        updateDetailSide(null);
+        updateStatus();
+      }
+    }
+
+    _render();
+  }
+
+  // ── Open a folder in a new tab ────────────────────────────
+  function openInNewTab(catId) {
+    if (!TABS_ENABLED || !catId || !catMap[catId]) return;
+
+    // If there are currently no tabs, materialise the current view as Tab 1 first
+    if (_tabs.length === 0 && currentCatId) {
+      const firstTab = {
+        id: _uid(),
+        catId: currentCatId,
+        navStack: navStack.slice(),
+        label: _labelFor(currentCatId),
+        scrollTop: 0,
+      };
+      _tabs.push(firstTab);
+      _activeId = firstTab.id;
+    }
+
+    // Save current state into the active tab before opening a new one
+    _saveActiveTab();
+
+    const newTab = {
+      id: _uid(),
+      catId,
+      navStack: buildBreadcrumb(catId),
+      label: _labelFor(catId),
+      scrollTop: 0,
+    };
+    _tabs.push(newTab);
+    _activeId = newTab.id;
+
+    // Navigate to the folder
+    currentCatId = catId;
+    navStack = newTab.navStack.slice();
+    renderTree();
+    renderBreadcrumb();
+    renderContentList();
+    updateDetailSide(null);
+    updateStatus();
+
+    _render();
+
+    // Scroll the new tab into view
+    requestAnimationFrame(() => {
+      const bar = document.getElementById('tab-bar');
+      const active = bar && bar.querySelector('.tab-item.active');
+      if (active) active.scrollIntoView({ inline: 'nearest', behavior: 'smooth' });
+    });
+  }
+
+  // ── Duplicate current folder as new tab (+ button) ────────
+  function openCurrentAsNewTab() {
+    if (currentCatId) openInNewTab(currentCatId);
+  }
+
+  // ── Called by navigateTo() so active tab tracks navigation ─
+  function onNavigate() {
+    if (!_activeId || _tabs.length < 2) return;
+    const tab = _tabs.find(t => t.id === _activeId);
+    if (!tab) return;
+    tab.catId    = currentCatId;
+    tab.navStack = navStack.slice();
+    tab.label    = _labelFor(currentCatId);
+    _render();
+  }
+
+  // ── Reset all tabs (e.g. when a new file is loaded) ───────
+  function reset() {
+    _tabs = [];
+    _activeId = null;
+    _render();
+  }
+
+  // ── Enable / disable the feature ─────────────────────────
+  function setEnabled(val) {
+    TABS_ENABLED = !!val;
+    localStorage.setItem('sl_inv_tabs_enabled', TABS_ENABLED ? 'true' : 'false');
+    if (!TABS_ENABLED) reset();
+    _render();
+    _syncToggleBtn();
+  }
+  function isEnabled() { return TABS_ENABLED; }
+
+  function _syncToggleBtn() {
+    const btn = document.getElementById('btn-tabs-toggle');
+    if (!btn) return;
+    btn.classList.toggle('active', TABS_ENABLED);
+    btn.title = TABS_ENABLED ? 'Tabs enabled — click to disable' : 'Tabs disabled — click to enable';
+    btn.textContent = TABS_ENABLED ? '⊞ Tabs' : '⊟ Tabs';
+  }
+
+  // ── Init ─────────────────────────────────────────────────
+  function init() {
+    _syncToggleBtn();
+
+    const newBtn = document.getElementById('tab-bar-new-btn');
+    if (newBtn) newBtn.addEventListener('click', openCurrentAsNewTab);
+
+    const toggleBtn = document.getElementById('btn-tabs-toggle');
+    if (toggleBtn) toggleBtn.addEventListener('click', () => setEnabled(!TABS_ENABLED));
+  }
+
+  return { init, reset, openInNewTab, openCurrentAsNewTab, onNavigate, isEnabled };
+})();
+// ── END TAB SYSTEM ──────────────────────────────────────────
+
+// ============================================================
 // Inventory data model
 // ============================================================
 let invData = null;         // raw parsed JSON {categories:[], items:[]}
@@ -548,6 +826,9 @@ if (searchQuery) {
 if (pushHistory) {
   navStack = buildBreadcrumb(catId);
 }
+
+// ── TAB SYSTEM: keep active tab label/state in sync ──
+TabManager.onNavigate();
 
 renderTree();
 renderBreadcrumb();
@@ -2219,6 +2500,7 @@ try {
   await new Promise(r => setTimeout(r, 20));
 
   invData = data;
+  TabManager.reset(); // ── TAB SYSTEM: clear tabs when a new file is loaded
   buildIndex(data);
 
   setProgress('Rendering…', '', 90);
@@ -2392,9 +2674,20 @@ function showContextMenu(e, entry) {
   const hasParent = parentId && catMap[parentId];
   openLoc.classList.toggle('disabled', !hasParent);
 
+  // ── TAB SYSTEM: show "Open in New Tab" only for folders when tabs are enabled ──
+  const tabSep  = document.getElementById('ctx-tab-sep');
+  const tabItem = document.getElementById('ctx-open-new-tab');
+  const showTab = entry._isFolder && TabManager.isEnabled() && !!currentCatId;
+  if (tabSep)  tabSep.style.display  = showTab ? '' : 'none';
+  if (tabItem) tabItem.style.display = showTab ? '' : 'none';
+  // ── END TAB SYSTEM ──
+
   // Position — keep menu inside viewport
+  // Use getBoundingClientRect after making items visible so height is accurate
   const menuW = 210;
-  const menuH = showSL ? 170 : 96;
+  menu.classList.remove('hidden');
+  const menuH = menu.getBoundingClientRect().height;
+  menu.classList.add('hidden');
   const x = Math.min(e.clientX, window.innerWidth  - menuW - 8);
   const y = Math.min(e.clientY, window.innerHeight - menuH - 8);
   menu.style.left = x + 'px';
@@ -2539,6 +2832,18 @@ function initContextMenu() {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') hideContextMenu();
   });
+
+  // ── TAB SYSTEM: Open in New Tab (folder-only) ────────────
+  const openNewTab = document.getElementById('ctx-open-new-tab');
+  if (openNewTab) {
+    openNewTab.addEventListener('click', () => {
+      if (!_ctxEntry || !_ctxEntry._isFolder) return;
+      const folderId = _ctxEntry._id || _ctxEntry.cat_id || _ctxEntry.category_id;
+      hideContextMenu();
+      TabManager.openInNewTab(folderId);
+    });
+  }
+  // ── END TAB SYSTEM ──────────────────────────────────────
 }
 
 // Attach contextmenu listener to an entry element
@@ -2576,6 +2881,7 @@ initResizer('resizer', 'tree-panel');
 initResizer('resizer2', 'detail-panel');
 initDetailResizer();
 initContextMenu();
+TabManager.init(); // ── TAB SYSTEM
 
 // Restore detail pane state
 const detailOpen = localStorage.getItem('sl_inv_detail_open');

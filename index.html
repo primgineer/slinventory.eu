@@ -78,6 +78,8 @@
         </div>
       </div>
       <button class="btn primary" id="btn-load">⬆ Load File</button>
+      <!-- ── TAB SYSTEM toggle ── -->
+      <button class="btn" id="btn-tabs-toggle" title="Toggle folder tabs feature">⊟ Tabs</button>
       <input type="file" id="file-input" accept=".gz,.json,.llsd" style="display:none">
     </div>
   </div>
@@ -94,6 +96,13 @@
       <button class="resume-btn resume-btn-yes" id="resume-btn-yes">↩ Resume</button>
       <button class="resume-btn resume-btn-no" id="resume-btn-no">✕ Dismiss</button>
     </div>
+  </div>
+
+  <!-- ── TAB BAR (tabs feature) ── -->
+  <!-- To disable: set TABS_ENABLED = false in sl_inv_browser.js TabManager section -->
+  <div id="tab-bar" class="hidden" role="tablist" aria-label="Open folders">
+    <!-- tabs injected by TabManager -->
+    <div id="tab-bar-new-btn" title="New tab (opens current folder)">+</div>
   </div>
 
   <!-- Main -->
@@ -236,6 +245,9 @@
     <div class="ctx-item" id="ctx-copy-id">Copy ID</div>
     <div class="ctx-sep"></div>
     <div class="ctx-item" id="ctx-open-location">Open File Location</div>
+    <!-- ── TAB SYSTEM: folder-only item, injected by initContextMenu() ── -->
+    <div class="ctx-sep" id="ctx-tab-sep" style="display:none"></div>
+    <div class="ctx-item" id="ctx-open-new-tab" style="display:none">Open in New Tab</div>
   </div>
 
   <!-- Status bar -->
@@ -461,6 +473,67 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <style>
+/* ── TAB SYSTEM ─────────────────────────────────────────────────────
+   Feature can be disabled by setting TABS_ENABLED = false in TabManager.
+   To fully remove: delete this CSS block, the #tab-bar HTML, the
+   ctx-tab-sep/ctx-open-new-tab HTML, btn-tabs-toggle HTML, and the
+   TabManager JS section.
+   ───────────────────────────────────────────────────────────────── */
+#tab-bar {
+  display: flex; align-items: stretch; flex-shrink: 0;
+  height: 32px; overflow-x: auto; overflow-y: hidden;
+  background: var(--bg1); border-bottom: 1px solid var(--border);
+  gap: 0; padding: 0 4px;
+  scrollbar-width: thin;
+}
+#tab-bar.hidden { display: none; }
+#tab-bar::-webkit-scrollbar { height: 3px; }
+#tab-bar::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.tab-item {
+  display: flex; align-items: center; gap: 5px;
+  padding: 0 10px 0 9px; cursor: pointer; flex-shrink: 0;
+  min-width: 80px; max-width: 200px;
+  border-right: 1px solid var(--border);
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim); font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  transition: color .12s, border-color .12s, background .12s;
+  user-select: none; position: relative;
+}
+.tab-item:hover { background: var(--hover); color: var(--text); }
+.tab-item.active {
+  color: var(--accent); border-bottom-color: var(--accent);
+  background: var(--bg2);
+}
+.tab-item svg { flex-shrink: 0; opacity: .7; }
+.tab-item.active svg { opacity: 1; }
+.tab-label {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tab-close {
+  flex-shrink: 0; width: 16px; height: 16px;
+  border-radius: 3px; border: none; background: none; cursor: pointer;
+  color: var(--text-mute); font-size: 12px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  transition: color .12s, background .12s;
+  padding: 0;
+}
+.tab-close:hover { color: var(--text); background: var(--bg3); }
+.tab-item.active .tab-close:hover { color: var(--red); background: rgba(232,85,85,.12); }
+
+#tab-bar-new-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; flex-shrink: 0; cursor: pointer; font-size: 16px;
+  color: var(--text-mute); border-radius: 4px; margin: 3px 2px;
+  transition: color .12s, background .12s;
+}
+#tab-bar-new-btn:hover { color: var(--accent); background: var(--hover); }
+
+/* Toggle button: active when tabs enabled */
+#btn-tabs-toggle.active { color: var(--accent); border-color: var(--accent); }
+/* ── END TAB SYSTEM ── */
+
 /* ── Theme dropdown ── */
 #theme-picker-wrap { position: relative; }
 #theme-dropdown {
