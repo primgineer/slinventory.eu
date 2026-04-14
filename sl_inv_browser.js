@@ -572,6 +572,427 @@ const TabManager = (() => {
 // ── END TAB SYSTEM ──────────────────────────────────────────
 
 // ============================================================
+// ── SPLIT SCREEN ────────────────────────────────────────────
+// Opens a second independent folder view in the right half of
+// the centre pane. The main breadcrumb/navigation is untouched.
+//
+// FEATURE TOGGLE: set SPLIT_SCREEN_ENABLED = false to fully disable.
+// When false: the pane stays hidden, the context menu item is absent,
+// zero runtime overhead. No other code is affected.
+//
+// TO REMOVE ENTIRELY: delete this whole section (search for
+// "── SPLIT SCREEN ──" / "── END SPLIT SCREEN ──"), remove
+// #btn-split-toggle from the toolbar in index.html, remove
+// ctx-split-sep + ctx-open-split HTML from index.html, and
+// delete the "── SPLIT SCREEN ──" CSS block in sl_inv_browser.css.
+// ============================================================
+const SplitScreen = (() => {
+  // ── Feature flag ─────────────────────────────────────────
+  // Default on; persisted per user in localStorage.
+  let SPLIT_SCREEN_ENABLED = localStorage.getItem('sl_inv_split_enabled') !== 'false';
+
+  // ── Internal state ────────────────────────────────────────
+  let _open      = false;   // is the pane currently visible?
+  let _catId     = null;    // folder being shown in the right pane
+  let _sortKey   = 'name';  // sort state, independent of main pane
+  let _sortAsc   = true;
+
+  // ── Helpers ───────────────────────────────────────────────
+  function _folderIcon() {
+    return `<svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+      <path d="M1 4a1 1 0 0 1 1-1h4l1.5 1.5H14a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V4z"
+        fill="currentColor" opacity=".75"/>
+    </svg>`;
+  }
+
+  // Wrap main-pane children in .detail-main if not already done.
+  // Called once on first open — avoids touching the DOM on every render.
+  function _ensureDetailMainWrapper() {
+    const dp = document.getElementById('detail-panel');
+    if (dp.querySelector('.detail-main')) return; // already wrapped
+
+    // Move breadcrumb + col-header + content-list into a wrapper div
+    const wrapper = document.createElement('div');
+    wrapper.className = 'detail-main';
+    // Collect children to move (all existing children of detail-panel)
+    const children = Array.from(dp.children);
+    children.forEach(c => wrapper.appendChild(c));
+    dp.appendChild(wrapper);
+  }
+
+  // Ensure the split-resizer and split-pane exist inside detail-panel.
+  // Injected once; subsequent calls are no-ops.
+  function _ensureSplitDOM() {
+    const dp = document.getElementById('detail-panel');
+    if (dp.querySelector('#split-resizer')) return;
+
+    // Resizer
+    const resizer = document.createElement('div');
+    resizer.id = 'split-resizer';
+    dp.appendChild(resizer);
+
+    // Right pane shell
+    const pane = document.createElement('div');
+    pane.id = 'split-pane';
+    pane.innerHTML = `
+      <div id="split-pane-header">
+        <div id="split-pane-icon">${_folderIcon()}</div>
+        <span id="split-pane-label">SPLIT</span>
+        <span id="split-pane-title">—</span>
+        <button id="split-pane-close" title="Close split screen">✕</button>
+      </div>
+      <div id="split-col-header">
+        <div class="col-h sorted" data-split-sort="name" id="split-sort-name">Name <span class="sort-arrow">↑</span></div>
+        <div class="col-h" data-split-sort="type" id="split-sort-type">Type <span class="sort-arrow"></span></div>
+        <div class="col-h" data-split-sort="date" id="split-sort-date">Modified <span class="sort-arrow"></span></div>
+        <div class="col-h" data-split-sort="count" id="split-sort-count">Items <span class="sort-arrow"></span></div>
+      </div>
+      <div id="split-pane-list"></div>
+    `;
+    dp.appendChild(pane);
+
+    // Wire close button
+    pane.querySelector('#split-pane-close').addEventListener('click', close);
+
+    // Wire sort column headers
+    pane.querySelectorAll('.col-h[data-split-sort]').forEach(el => {
+      el.addEventListener('click', () => _setSortKey(el.dataset.splitSort));
+    });
+
+    // Wire resizer drag
+    _initResizer(resizer, pane);
+  }
+
+  // ── Resizer ───────────────────────────────────────────────
+  function _initResizer(resizerEl, rightPaneEl) {
+    let startX = 0, startW = 0;
+    function onMove(e) {
+      // Dragging left shrinks right pane, dragging right expands it
+      const dp = document.getElementById('detail-panel');
+      const dpW = dp.offsetWidth;
+      const delta = startX - e.clientX; // positive = dragging left = right pane grows
+      const newW = Math.max(200, Math.min(dpW - 200, startW + delta));
+      rightPaneEl.style.width = newW + 'px';
+    }
+    function onUp() {
+      resizerEl.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    resizerEl.addEventListener('mousedown', e => {
+      startX = e.clientX;
+      startW = rightPaneEl.offsetWidth;
+      resizerEl.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  // ── Sort ──────────────────────────────────────────────────
+  function _setSortKey(key) {
+    if (_sortKey === key) _sortAsc = !_sortAsc;
+    else { _sortKey = key; _sortAsc = true; }
+
+    // Update column header UI
+    const pane = document.getElementById('split-pane');
+    if (!pane) return;
+    pane.querySelectorAll('.col-h[data-split-sort]').forEach(el => {
+      el.classList.remove('sorted');
+      el.querySelector('.sort-arrow').textContent = '';
+    });
+    const activeCol = pane.querySelector(`[data-split-sort="${key}"]`);
+    if (activeCol) {
+      activeCol.classList.add('sorted');
+      activeCol.querySelector('.sort-arrow').textContent = _sortAsc ? '↑' : '↓';
+    }
+    _renderList();
+  }
+
+  // ── Get sorted contents for the split pane ────────────────
+  // Uses its own sort state but shares the same global data maps.
+  function _getSortedContents(catId) {
+    if (!catId) return [];
+    const folders = (catChildren[catId] || []).map(id => ({ _isFolder: true, _id: id, ...catMap[id] }));
+    const its = catItems[catId] || [];
+    const sortFn = (a, b) => {
+      if (_sortKey === 'name') {
+        return _sortAsc ? naturalCompare(a.name || '', b.name || '') : naturalCompare(b.name || '', a.name || '');
+      }
+      let va, vb;
+      if (_sortKey === 'type') {
+        va = a._isFolder ? 'folder' : getTypeKeyName(a._typeKey || 'unknown');
+        vb = b._isFolder ? 'folder' : getTypeKeyName(b._typeKey || 'unknown');
+      } else if (_sortKey === 'date') {
+        va = a.creation_date || 0; vb = b.creation_date || 0;
+      } else if (_sortKey === 'count') {
+        va = a._isFolder ? countDescendantItems(a._id) : 0;
+        vb = b._isFolder ? countDescendantItems(b._id) : 0;
+      }
+      if (va < vb) return _sortAsc ? -1 : 1;
+      if (va > vb) return _sortAsc ? 1 : -1;
+      return 0;
+    };
+    return [...folders.sort(sortFn), ...its.sort(sortFn)];
+  }
+
+  // ── Render the split pane content ────────────────────────
+  // Mirrors viewMode (list / icons) and wires clicks to the detail pane.
+  function _renderList() {
+    const listEl    = document.getElementById('split-pane-list');
+    const colHeader = document.getElementById('split-col-header');
+    if (!listEl || !_catId) return;
+
+    // Disconnect thumb observer before wiping DOM
+    if (typeof thumbObserver !== 'undefined') thumbObserver.disconnect();
+
+    listEl.innerHTML = '';
+    const contents = _getSortedContents(_catId);
+
+    // Col header only visible in list mode
+    if (colHeader) colHeader.style.display = (viewMode === 'icons') ? 'none' : '';
+
+    if (contents.length === 0) {
+      listEl.innerHTML = '<div class="empty-state"><div class="es-icon">📭</div><div class="es-text">This folder is empty</div></div>';
+      return;
+    }
+
+    function _clearSplitSel() {
+      listEl.querySelectorAll('.list-row.selected, .icon-cell.selected')
+            .forEach(el => el.classList.remove('selected'));
+    }
+
+    if (viewMode === 'icons') {
+      // ── Icons view ───────────────────────────────────────
+      const grid = document.createElement('div');
+      grid.className = 'icon-grid';
+
+      for (const entry of contents) {
+        const cell = document.createElement('div');
+        cell.className = 'icon-cell';
+
+        const ft = entry.preferred_type ?? entry.type_default ?? -1;
+        const tk = entry._typeKey || 'unknown';
+        const typeName = entry._isFolder ? getFolderTypeName(ft) : getTypeKeyName(tk);
+
+        if (entry._isFolder) {
+          cell.appendChild(buildFolderThumbCell(entry));
+        } else if (isTextureType(entry) && itemHasAssetId(entry)) {
+          const thumbBox = document.createElement('div');
+          thumbBox.className = 'thumb-box';
+          const spinWrap = document.createElement('div');
+          spinWrap.className = 'thumb-icon';
+          spinWrap.innerHTML = `<div class="thumb-spin"></div>`;
+          thumbBox.appendChild(spinWrap);
+          const img = document.createElement('img');
+          img.alt = '';
+          thumbBox.appendChild(img);
+          observeThumb(thumbBox, entry.asset_id, 'texture');
+          cell.appendChild(thumbBox);
+        } else {
+          const thumbBox = document.createElement('div');
+          thumbBox.className = 'thumb-box';
+          const iconSvg = getIconForItem(tk);
+          const objThumbId = entry.thumbnail?.asset_id &&
+            entry.thumbnail.asset_id !== '00000000-0000-0000-0000-000000000000'
+            ? entry.thumbnail.asset_id : null;
+          if (objThumbId) {
+            const spinWrap = document.createElement('div');
+            spinWrap.className = 'thumb-icon';
+            spinWrap.innerHTML = iconSvg.replace(/width="16" height="16"/, 'width="38" height="38"');
+            thumbBox.appendChild(spinWrap);
+            const img = document.createElement('img');
+            img.alt = '';
+            img.addEventListener('load',  () => { img.classList.add('loaded'); thumbBox.classList.add('img-loaded'); spinWrap.style.display = 'none'; }, { once: true });
+            img.addEventListener('error', () => { img.style.display = 'none'; spinWrap.style.display = ''; }, { once: true });
+            thumbBox.appendChild(img);
+            observeThumb(thumbBox, objThumbId, 'texture');
+          } else {
+            const iconDiv = document.createElement('div');
+            iconDiv.className = 'thumb-icon';
+            iconDiv.innerHTML = iconSvg.replace(/width="16" height="16"/, 'width="38" height="38"');
+            thumbBox.appendChild(iconDiv);
+          }
+          cell.appendChild(thumbBox);
+        }
+
+        const label = document.createElement('div');
+        label.className = 'icon-label';
+        label.textContent = entry.name || '(unnamed)';
+        cell.appendChild(label);
+
+        const typeEl = document.createElement('div');
+        typeEl.className = 'icon-type';
+        typeEl.textContent = typeName;
+        cell.appendChild(typeEl);
+
+        cell.addEventListener('mousedown', () => {
+          _clearSplitSel();
+          cell.classList.add('selected');
+          updateDetailSide(entry);
+          updateStatus();
+        });
+        cell.addEventListener('dblclick', () => {
+          if (entry._isFolder) _openFolder(entry._id);
+          else if (isTextureType(entry) && itemHasAssetId(entry)) openLightbox(entry.asset_id, entry.name);
+        });
+        cell.addEventListener('contextmenu', e => showContextMenu(e, entry));
+        grid.appendChild(cell);
+      }
+      listEl.appendChild(grid);
+
+    } else {
+      // ── List view ─────────────────────────────────────────
+      const frag = document.createDocumentFragment();
+      for (const entry of contents) {
+        const row = document.createElement('div');
+        row.className = 'list-row';
+
+        const ft = entry.preferred_type ?? entry.type_default ?? -1;
+        const tk = entry._typeKey || 'unknown';
+        const iconSvg  = entry._isFolder ? getIconForCategory(ft) : getIconForItem(tk);
+        const typeName = entry._isFolder ? getFolderTypeName(ft) : getTypeKeyName(tk);
+        const date     = entry.creation_date ? formatDate(entry.creation_date) : '—';
+        const countVal = entry._isFolder
+          ? (() => { const c = countDescendantItems(entry._id); return c > 0 ? c.toLocaleString() : ''; })()
+          : '';
+
+        row.innerHTML = `
+          <div class="name-cell">
+            <div class="icon">${iconSvg}</div>
+            <span>${escHtml(entry.name || '(unnamed)')}</span>
+          </div>
+          <div class="type-cell">${escHtml(typeName)}</div>
+          <div class="date-cell">${date}</div>
+          <div class="count-cell">${countVal}</div>
+        `;
+
+        row.addEventListener('mousedown', () => {
+          _clearSplitSel();
+          row.classList.add('selected');
+          updateDetailSide(entry);
+          updateStatus();
+        });
+        row.addEventListener('dblclick', () => {
+          if (entry._isFolder) _openFolder(entry._id);
+          else if (isTextureType(entry) && itemHasAssetId(entry)) openLightbox(entry.asset_id, entry.name);
+        });
+        row.addEventListener('contextmenu', e => showContextMenu(e, entry));
+        frag.appendChild(row);
+      }
+      listEl.appendChild(frag);
+    }
+  }
+
+  // ── Update the pane header to show current folder name ────
+  function _updateHeader() {
+    const titleEl = document.getElementById('split-pane-title');
+    if (!titleEl || !_catId) return;
+    const cat = catMap[_catId];
+    titleEl.textContent = cat ? (cat.name || '(unnamed)') : '—';
+    titleEl.title = cat ? (cat.name || '(unnamed)') : '';
+  }
+
+  // ── Internal: navigate within the split pane ──────────────
+  function _openFolder(catId) {
+    if (!catId || !catMap[catId]) return;
+    _catId = catId;
+    _updateHeader();
+    _renderList();
+  }
+
+  // ── Public: open or switch the split pane ─────────────────
+  function openFolder(catId) {
+    if (!SPLIT_SCREEN_ENABLED || !catId || !catMap[catId]) return;
+
+    _ensureDetailMainWrapper();
+    _ensureSplitDOM();
+
+    _catId = catId;
+
+    // Activate the split layout
+    const dp = document.getElementById('detail-panel');
+    dp.classList.add('split-active');
+    _open = true;
+
+    _syncToggleBtn();
+    _updateHeader();
+    _renderList();
+  }
+
+  // ── Public: close the split pane ──────────────────────────
+  function close() {
+    _open = false;
+    _catId = null;
+    const dp = document.getElementById('detail-panel');
+    if (dp) dp.classList.remove('split-active');
+    _syncToggleBtn();
+  }
+
+  // ── Public: is the pane currently open? ───────────────────
+  function isOpen() { return _open; }
+
+  // ── Public: is the feature enabled? ──────────────────────
+  function isEnabled() { return SPLIT_SCREEN_ENABLED; }
+
+  // ── Enable / disable ─────────────────────────────────────
+  function setEnabled(val) {
+    SPLIT_SCREEN_ENABLED = !!val;
+    localStorage.setItem('sl_inv_split_enabled', SPLIT_SCREEN_ENABLED ? 'true' : 'false');
+    if (!SPLIT_SCREEN_ENABLED && _open) close();
+    _syncToggleBtn();
+  }
+
+  // ── Called when inventory is reset (new file loaded) ──────
+  function reset() {
+    _open = false;
+    _catId = null;
+    const dp = document.getElementById('detail-panel');
+    if (dp) dp.classList.remove('split-active');
+    _syncToggleBtn();
+  }
+
+  // ── Sync the toolbar toggle button state ─────────────────
+  // Convention matches Tabs: .active = feature is ON (regardless of pane state).
+  // Text symbol changes to show whether a pane is currently open.
+  function _syncToggleBtn() {
+    const btn = document.getElementById('btn-split-toggle');
+    if (!btn) return;
+    btn.classList.toggle('active', SPLIT_SCREEN_ENABLED);
+    if (!SPLIT_SCREEN_ENABLED) {
+      btn.title       = 'Split screen disabled — click to enable';
+      btn.textContent = '⊟ Split';
+    } else if (_open) {
+      btn.title       = 'Split screen enabled — pane open (click to disable feature)';
+      btn.textContent = '⊞ Split';
+    } else {
+      btn.title       = 'Split screen enabled — right-click a folder to open (click to disable)';
+      btn.textContent = '⊟ Split';
+    }
+  }
+
+  // ── Init ─────────────────────────────────────────────────
+  function init() {
+    _syncToggleBtn();
+    const toggleBtn = document.getElementById('btn-split-toggle');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => setEnabled(!SPLIT_SCREEN_ENABLED));
+    }
+  }
+
+  // ── Public: re-render when global viewMode changes ──────────
+  function refresh() {
+    if (_open && _catId) _renderList();
+  }
+
+  return { init, openFolder, close, isOpen, isEnabled, setEnabled, reset, refresh };
+})();
+// ── END SPLIT SCREEN ────────────────────────────────────────
+
+// ============================================================
 // Inventory data model
 // ============================================================
 let invData = null;         // raw parsed JSON {categories:[], items:[]}
@@ -2554,7 +2975,8 @@ try {
   await new Promise(r => setTimeout(r, 20));
 
   invData = data;
-  TabManager.reset(); // ── TAB SYSTEM: clear tabs when a new file is loaded
+  TabManager.reset();    // ── TAB SYSTEM: clear tabs when a new file is loaded
+  SplitScreen.reset();   // ── SPLIT SCREEN: close split pane when a new file is loaded
   buildIndex(data);
 
   setProgress('Rendering…', '', 90);
@@ -2742,6 +3164,14 @@ function showContextMenu(e, entry) {
   if (openTreeSep)  openTreeSep.style.display  = '';
   if (openTreeItem) openTreeItem.style.display = '';
 
+  // ── SPLIT SCREEN: show "Open in split screen" for folders when feature is enabled ──
+  const splitSep  = document.getElementById('ctx-split-sep');
+  const splitItem = document.getElementById('ctx-open-split');
+  const showSplit = entry._isFolder && SplitScreen.isEnabled() && !!currentCatId;
+  if (splitSep)  splitSep.style.display  = showSplit ? '' : 'none';
+  if (splitItem) splitItem.style.display = showSplit ? '' : 'none';
+  // ── END SPLIT SCREEN ──
+
   // Position — keep menu inside viewport
   // Use getBoundingClientRect after making items visible so height is accurate
   const menuW = 210;
@@ -2917,6 +3347,28 @@ function initContextMenu() {
   });
   // ── END "Open in tree" ──
 
+  // ── SPLIT SCREEN: "Open in split screen" (folder-only) ──────
+  const splitSep = document.createElement('div');
+  splitSep.id        = 'ctx-split-sep';
+  splitSep.className = 'ctx-sep';
+  splitSep.style.display = 'none';
+  openTreeItem.insertAdjacentElement('afterend', splitSep);
+
+  const splitItem = document.createElement('div');
+  splitItem.id        = 'ctx-open-split';
+  splitItem.className = 'ctx-item';
+  splitItem.textContent = 'Open in split screen';
+  splitItem.style.display = 'none';
+  splitSep.insertAdjacentElement('afterend', splitItem);
+
+  splitItem.addEventListener('click', () => {
+    if (!_ctxEntry || !_ctxEntry._isFolder) return;
+    const folderId = _ctxEntry._id || _ctxEntry.cat_id || _ctxEntry.category_id;
+    hideContextMenu();
+    SplitScreen.openFolder(folderId);
+  });
+  // ── END SPLIT SCREEN ────────────────────────────────────────
+
   // Dismiss on click outside or Escape
   document.addEventListener('click', e => {
     if (!menu.classList.contains('hidden') && !menu.contains(e.target)) hideContextMenu();
@@ -2974,6 +3426,7 @@ initResizer('resizer2', 'detail-panel');
 initDetailResizer();
 initContextMenu();
 TabManager.init(); // ── TAB SYSTEM
+SplitScreen.init(); // ── SPLIT SCREEN
 
 // Restore detail pane state
 const detailOpen = localStorage.getItem('sl_inv_detail_open');
@@ -3020,6 +3473,7 @@ document.getElementById('btn-view-list').addEventListener('click', () => {
   document.getElementById('size-slider-wrap').classList.add('hidden');
   localStorage.setItem('sl_inv_viewmode', 'list');
   renderContentList();
+  SplitScreen.refresh(); // ── SPLIT SCREEN: keep split pane in sync with view mode
 });
 
 document.getElementById('btn-view-icons').addEventListener('click', () => {
@@ -3029,6 +3483,7 @@ document.getElementById('btn-view-icons').addEventListener('click', () => {
   document.getElementById('size-slider-wrap').classList.remove('hidden');
   localStorage.setItem('sl_inv_viewmode', 'icons');
   renderContentList();
+  SplitScreen.refresh(); // ── SPLIT SCREEN: keep split pane in sync with view mode
 });
 
 document.getElementById('icon-size-slider').addEventListener('input', e => {

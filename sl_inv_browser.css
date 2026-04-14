@@ -628,3 +628,164 @@ kbd {
 }
 
 
+
+/* ============================================================
+   ── SPLIT SCREEN ──
+   CSS for the split-screen feature. To remove: delete this
+   entire block and the SplitScreen IIFE in sl_inv_browser.js,
+   remove #btn-split-toggle from index.html,
+   remove ctx-split-sep + ctx-open-split from index.html.
+   ============================================================ */
+
+/* When split is active, detail-panel becomes a horizontal flex container */
+#detail-panel.split-active {
+  flex-direction: row;
+  overflow: hidden;
+}
+
+/* Left content area — normal content list wrapper, constrained in split mode */
+#detail-panel.split-active .detail-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The draggable divider between the two panes */
+#split-resizer {
+  width: 5px;
+  cursor: col-resize;
+  background: var(--border);
+  flex-shrink: 0;
+  transition: background .15s;
+  position: relative;
+  z-index: 5;
+  display: none; /* hidden until split is open */
+}
+#split-resizer:hover,
+#split-resizer.dragging { background: var(--accent); }
+#detail-panel.split-active #split-resizer { display: block; }
+
+/* Right split pane */
+#split-pane {
+  display: none; /* hidden until opened */
+  flex-direction: column;
+  width: 400px;
+  min-width: 200px;
+  max-width: 75%;
+  background: var(--bg);
+  overflow: hidden;
+  position: relative;
+}
+#detail-panel.split-active #split-pane {
+  display: flex;
+}
+
+/* Split pane header bar */
+#split-pane-header {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg1);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+#split-pane-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+  opacity: 0.7;
+}
+#split-pane-title {
+  flex: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#split-pane-label {
+  font-size: 10px;
+  color: var(--text-mute);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+#split-pane-close {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid var(--border2);
+  background: var(--bg2);
+  color: var(--text-mute);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+#split-pane-close:hover {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+
+/* The scrollable content area of the split pane */
+#split-pane-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Column header inside split pane (list view) */
+#split-col-header {
+  display: grid;
+  grid-template-columns: 1fr 90px 95px 55px;
+  padding: 0 8px;
+  height: 26px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg1);
+  flex-shrink: 0;
+}
+#split-col-header .col-h {
+  font-size: 11px;
+  color: var(--text-mute);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  padding: 0 4px;
+  transition: color .15s;
+}
+#split-col-header .col-h:hover { color: var(--accent); }
+#split-col-header .col-h.sorted { color: var(--accent); }
+#split-col-header .sort-arrow { font-size: 10px; }
+
+/* Split pane rows share .list-row styles — they will render identically */
+
+/* Toolbar toggle button for split screen */
+#btn-split-toggle.active { color: var(--accent); border-color: var(--accent); }
+
+/* Animate split pane opening */
+@keyframes split-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+#detail-panel.split-active #split-pane {
+  animation: split-in .18s ease;
+}
+
+/* ── END SPLIT SCREEN ── */
