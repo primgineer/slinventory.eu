@@ -312,6 +312,11 @@ let searchQuery = '';
 let expandedNodes = new Set();
 // DEFAULT_VIEW: change 'icons' to 'list' to flip the default
 const DEFAULT_VIEW = 'icons';
+
+// RUN_SL_CMDS: when true, folder SL URL actions (Replace/Add/Remove) are
+// executed via window.location in addition to being copied to the clipboard.
+// Set to true only if you are running this page from within the SL browser.
+const RUN_SL_CMDS = false;
 let viewMode = DEFAULT_VIEW;
 let iconSize = 100;
 // activeTypeFilter: Set of canonical type keys (strings like 'texture','sound',…,'folder')
@@ -2367,6 +2372,18 @@ function showContextMenu(e, entry) {
   copyId.textContent  = entry._isFolder ? 'Copy Folder ID' : 'Copy Item ID';
   openLoc.textContent = entry._isFolder ? 'Open Folder Location' : 'Open File Location';
 
+  // Show / hide folder-only SL URL items
+  const slSep     = document.getElementById('ctx-sl-sep');
+  const slReplace = document.getElementById('ctx-sl-replace');
+  const slAdd     = document.getElementById('ctx-sl-add');
+  const slRemove  = document.getElementById('ctx-sl-remove');
+  const showSL    = !!entry._isFolder;
+  const slDisplay = showSL ? '' : 'none';
+  if (slSep)     slSep.style.display     = slDisplay;
+  if (slReplace) slReplace.style.display = slDisplay;
+  if (slAdd)     slAdd.style.display     = slDisplay;
+  if (slRemove)  slRemove.style.display  = slDisplay;
+
   // Disable "Open Location" if there's no navigable parent
   // (e.g. right-clicking the root itself from the tree — parent_id would be null/root)
   const parentId = entry._isFolder
@@ -2376,7 +2393,8 @@ function showContextMenu(e, entry) {
   openLoc.classList.toggle('disabled', !hasParent);
 
   // Position — keep menu inside viewport
-  const menuW = 200, menuH = 96;
+  const menuW = 210;
+  const menuH = showSL ? 170 : 96;
   const x = Math.min(e.clientX, window.innerWidth  - menuW - 8);
   const y = Math.min(e.clientY, window.innerHeight - menuH - 8);
   menu.style.left = x + 'px';
@@ -2395,6 +2413,77 @@ function initContextMenu() {
   const copyId   = document.getElementById('ctx-copy-id');
   const openLoc  = document.getElementById('ctx-open-location');
 
+  // ── Inject folder-only SL URL items after the existing menu items ──
+  // Separator
+  const slSep = document.createElement('div');
+  slSep.id        = 'ctx-sl-sep';
+  slSep.className = 'ctx-sep';
+  slSep.style.display = 'none';
+  menu.appendChild(slSep);
+
+  // Helper: build a ctx-item div
+  function makeCtxItem(id, label) {
+    const el = document.createElement('div');
+    el.id        = id;
+    el.className = 'ctx-item';
+    el.style.display = 'none';
+    el.textContent = label;
+    menu.appendChild(el);
+    return el;
+  }
+
+  const slReplace = makeCtxItem('ctx-sl-replace', 'Replace');
+  const slAdd     = makeCtxItem('ctx-sl-add',     'Add');
+  const slRemove  = makeCtxItem('ctx-sl-remove',  'Remove');
+
+  // ── Helper: resolve folder id from the current ctx entry ──
+  function getFolderId() {
+    if (!_ctxEntry || !_ctxEntry._isFolder) return null;
+    return _ctxEntry.cat_id || _ctxEntry.category_id || _ctxEntry._id || null;
+  }
+
+  // ── Helper: execute an SL URL (copy to clipboard; also dispatch if RUN_SL_CMDS) ──
+  // When RUN_SL_CMDS = true:
+  //   - SL's built-in CEF browser (detected via UA): silent iframe dispatch, no prompt
+  //   - Regular browser: window.location.href triggers the OS protocol handler prompt
+  //     ("Allow this site to open Second Life?"), page stays open either way
+  function executeSLUrl(url) {
+    navigator.clipboard.writeText(url).catch(() => {});
+    if (RUN_SL_CMDS) {
+      if (/SecondLife|Dullahan/i.test(navigator.userAgent)) {
+        // Inside SL's built-in browser — dispatch silently via hidden iframe
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = url;
+        document.body.appendChild(iframe);
+        setTimeout(() => iframe.remove(), 1000);
+      } else {
+        // Regular browser — triggers OS protocol handler prompt, page stays open
+        window.location.href = url;
+      }
+    }
+    hideContextMenu();
+  }
+
+  slReplace.addEventListener('click', () => {
+    const id = getFolderId();
+    if (!id) return;
+    executeSLUrl(`secondlife://app/wear_folder/?folder_id=${id}`);
+  });
+
+  slAdd.addEventListener('click', () => {
+    const id = getFolderId();
+    if (!id) return;
+    executeSLUrl(`secondlife://app/add_folder/?folder_id=${id}`);
+  });
+
+  slRemove.addEventListener('click', () => {
+    const id = getFolderId();
+    if (!id) return;
+    executeSLUrl(`secondlife://app/remove_folder/?folder_id=${id}`);
+  });
+
+  // ── Existing items ──
   copyName.addEventListener('click', () => {
     if (!_ctxEntry) return;
     navigator.clipboard.writeText(_ctxEntry.name || '').catch(() => {});
