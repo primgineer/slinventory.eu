@@ -3092,7 +3092,7 @@ resizer.classList.toggle('hidden');
 if (btn) {
   // isHidden=true means panel was collapsed and is now opening
   btn.classList.toggle('active', isHidden);
-  btn.textContent = isHidden ? '‹' : '›';
+  btn.textContent = isHidden ? '›' : '‹';
 }
 localStorage.setItem('sl_inv_detail_open', isHidden ? '1' : '0');
 }
@@ -3438,7 +3438,7 @@ if (detailOpen === '0') {
 {
   const btn = document.getElementById('btn-toggle-detail');
   const isOpen = !document.getElementById('detail-side').classList.contains('collapsed');
-  if (btn) { btn.classList.toggle('active', isOpen); btn.textContent = isOpen ? '‹' : '›'; }
+  if (btn) { btn.classList.toggle('active', isOpen); btn.textContent = isOpen ? '›' : '‹'; }
 }
 
 document.getElementById('btn-toggle-detail').addEventListener('click', toggleDetailPane);
