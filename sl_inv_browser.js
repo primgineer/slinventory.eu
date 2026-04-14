@@ -803,6 +803,60 @@ renderTree();
 }
 
 // ============================================================
+// Reveal a folder in the tree pane
+// ============================================================
+// Expands all ancestors of catId, re-renders the tree, scrolls
+// the node row into view, and shifts focus to the tree panel.
+// Also auto-opens the tree pane if it is currently collapsed.
+function revealInTree(catId) {
+  if (!catId || !catMap[catId]) return;
+
+  // 1. Auto-open tree pane if collapsed
+  const treePanel = document.getElementById('tree-panel');
+  if (treePanel && treePanel.classList.contains('collapsed')) {
+    toggleTreePane();
+  }
+
+  // 2. Expand every ancestor (root → parent) so the node is visible
+  const ancestors = [];
+  let id = catId;
+  while (id && catMap[id]) {
+    ancestors.push(id);
+    const pid = catMap[id].parent_id;
+    if (!pid || pid === '00000000-0000-0000-0000-000000000000' || !catMap[pid]) break;
+    id = pid;
+  }
+  // ancestors[0] = target, last = root. Expand all of them.
+  for (const aid of ancestors) {
+    expandedNodes.add(aid);
+  }
+
+  // 3. Navigate to the folder so the main pane also reflects it,
+  //    but keep the current main-pane view intact — only update the tree selection.
+  //    We re-render the tree so the expanded/selected state is painted.
+  //
+  //    We deliberately do NOT call navigateTo() here: the user right-clicked
+  //    something in the main view and just wants the tree to point at it;
+  //    we should not replace what they are browsing. Instead we update
+  //    currentCatId (for tree highlight) only if the user clicked a folder.
+  //    For items we just want to highlight the parent folder in the tree.
+  currentCatId = catId;
+  renderTree();
+  renderBreadcrumb();
+
+  // 4. Scroll the tree row into view and give the pane focus
+  requestAnimationFrame(() => {
+    const selected = document.querySelector('#tree-scroll .tree-node-row.selected');
+    if (selected) {
+      selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      // Move focus to the tree scroll container so keyboard nav works
+      const scroll = document.getElementById('tree-scroll');
+      if (scroll) scroll.focus({ preventScroll: true });
+    }
+  });
+}
+
+// ============================================================
 // Detail panel (content list)
 // ============================================================
 function navigateTo(catId, pushHistory = true, selectFolderId = null) {
@@ -2682,6 +2736,12 @@ function showContextMenu(e, entry) {
   if (tabItem) tabItem.style.display = showTab ? '' : 'none';
   // ── END TAB SYSTEM ──
 
+  // ── "Open in tree" — always shown for items and folders ──
+  const openTreeSep  = document.getElementById('ctx-open-tree-sep');
+  const openTreeItem = document.getElementById('ctx-open-tree');
+  if (openTreeSep)  openTreeSep.style.display  = '';
+  if (openTreeItem) openTreeItem.style.display = '';
+
   // Position — keep menu inside viewport
   // Use getBoundingClientRect after making items visible so height is accurate
   const menuW = 210;
@@ -2824,6 +2884,38 @@ function initContextMenu() {
       }, 0);
     }
   });
+
+  // ── "Open in tree" — reveal item/folder in the tree pane ──
+  // Injected below "Open Folder/File Location" (ctx-open-location).
+  const openTreeSep = document.createElement('div');
+  openTreeSep.id        = 'ctx-open-tree-sep';
+  openTreeSep.className = 'ctx-sep';
+  openTreeSep.style.display = 'none';
+  // Insert immediately after openLoc
+  openLoc.insertAdjacentElement('afterend', openTreeSep);
+
+  const openTreeItem = document.createElement('div');
+  openTreeItem.id        = 'ctx-open-tree';
+  openTreeItem.className = 'ctx-item';
+  openTreeItem.textContent = 'Open in tree';
+  openTreeItem.style.display = 'none';
+  openTreeSep.insertAdjacentElement('afterend', openTreeItem);
+
+  openTreeItem.addEventListener('click', () => {
+    if (!_ctxEntry) return;
+    const entry = _ctxEntry;
+    hideContextMenu();
+
+    // For a folder: reveal it directly.
+    // For an item: reveal its parent folder (items are not tree nodes).
+    const targetCatId = entry._isFolder
+      ? (entry._id || entry.cat_id || entry.category_id)
+      : entry.parent_id;
+
+    if (!targetCatId || !catMap[targetCatId]) return;
+    revealInTree(targetCatId);
+  });
+  // ── END "Open in tree" ──
 
   // Dismiss on click outside or Escape
   document.addEventListener('click', e => {
