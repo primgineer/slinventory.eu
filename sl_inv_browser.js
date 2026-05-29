@@ -2053,7 +2053,7 @@ function renderLightbox() {
   if (!entry) return;
   const img   = document.getElementById('lightbox-img');
   const label = document.getElementById('lightbox-name');
-  img.src = thumbUrl(entry.assetId).replace('256x192', '512x512');
+  img.src = thumbUrl(entry.assetId).replace('320x240');
   img.onerror = () => { img.src = thumbUrl(entry.assetId); img.onerror = null; };
   label.textContent = entry.name || '';
   // Show/hide nav arrows
@@ -2083,7 +2083,7 @@ function closeLightbox() {
 }
 
 function thumbUrl(assetId) {
-return `https://picture-service.secondlife.com/${assetId}/256x192.jpg`;
+return `https://picture-service.secondlife.com/${assetId}/320x240.jpg`;
 }
 
 // ── IntersectionObserver lazy loader ──────────────────────────
