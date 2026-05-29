@@ -3466,10 +3466,14 @@ function showContextMenu(e, entry) {
   const menu       = document.getElementById('ctx-menu');
   const copyId     = document.getElementById('ctx-copy-id');
   const openLoc    = document.getElementById('ctx-open-location');
+  const openItem   = document.getElementById('ctx-open');
 
   // Dynamic labels
   copyId.textContent  = entry._isFolder ? 'Copy Folder ID' : 'Copy Item ID';
   openLoc.textContent = entry._isFolder ? 'Open Folder Location' : 'Open File Location';
+
+  // "Open" navigates into the folder — folders only.
+  if (openItem) openItem.style.display = entry._isFolder ? '' : 'none';
 
   // Show / hide folder-only SL URL items
   const slSep     = document.getElementById('ctx-sl-sep');
@@ -3753,6 +3757,22 @@ function initContextMenu() {
     openFolderSearch(folderId, fromSplit);
   });
 
+  // ── Open (folder-only) — navigate into the clicked folder ──
+  const openEl = document.createElement('div');
+  openEl.id        = 'ctx-open';
+  openEl.className = 'ctx-item';
+  openEl.textContent = 'Open';
+  openEl.style.display = 'none';
+  menu.appendChild(openEl);
+
+  openEl.addEventListener('click', () => {
+    if (!_ctxEntry || !_ctxEntry._isFolder) return;
+    const folderId = _ctxEntry._id || _ctxEntry.cat_id || _ctxEntry.category_id;
+    hideContextMenu();
+    if (!folderId || !catMap[folderId]) return;
+    navigateTo(folderId);
+  });
+
   // Dismiss on click outside or Escape
   document.addEventListener('click', e => {
     if (!menu.classList.contains('hidden') && !menu.contains(e.target)) hideContextMenu();
@@ -3772,6 +3792,41 @@ function initContextMenu() {
     });
   }
   // ── END TAB SYSTEM ──────────────────────────────────────
+
+  // ── Final menu layout ───────────────────────────────────
+  // Order: Search…, Open, Open in New Tab, Open in split screen, Open in tree,
+  // (Open Location — search/split only), ─sep─, Copy Name, Copy ID,
+  // ─sep (SL)─, Replace, Add, Remove.
+  // Collapse the per-item separators down to exactly two stable ones; the
+  // nav separator is always shown (the nav group always has "Open in tree"),
+  // the SL separator follows the folder-only SL toggle (id reused so the
+  // existing show/hide logic in showContextMenu keeps working).
+  menu.querySelectorAll('.ctx-sep').forEach(el => el.remove());
+
+  const ctxNavSep = document.createElement('div');
+  ctxNavSep.id = 'ctx-nav-sep';
+  ctxNavSep.className = 'ctx-sep';
+
+  const ctxSlSep = document.createElement('div');
+  ctxSlSep.id = 'ctx-sl-sep';
+  ctxSlSep.className = 'ctx-sep';
+  ctxSlSep.style.display = 'none';
+
+  [
+    document.getElementById('ctx-search'),
+    document.getElementById('ctx-open'),
+    document.getElementById('ctx-open-new-tab'),
+    document.getElementById('ctx-open-split'),
+    document.getElementById('ctx-open-tree'),
+    document.getElementById('ctx-open-location'),
+    ctxNavSep,
+    document.getElementById('ctx-copy-name'),
+    document.getElementById('ctx-copy-id'),
+    ctxSlSep,
+    document.getElementById('ctx-sl-replace'),
+    document.getElementById('ctx-sl-add'),
+    document.getElementById('ctx-sl-remove'),
+  ].forEach(el => { if (el) menu.appendChild(el); });
 }
 
 // Attach contextmenu listener to an entry element
