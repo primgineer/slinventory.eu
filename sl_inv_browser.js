@@ -396,6 +396,7 @@ const TabManager = (() => {
     tab.catId    = currentCatId;
     tab.navStack = navStack.slice();
     tab.label    = _labelFor(currentCatId);
+    tab.search   = getSearchSnapshot();
     // Capture scroll position
     const cl = document.getElementById('content-list');
     if (cl) tab.scrollTop = cl.scrollTop;
@@ -414,6 +415,7 @@ const TabManager = (() => {
     // Restore state
     currentCatId = tab.catId;
     navStack = tab.navStack.slice();
+    applySearchSnapshot(tab.search);
 
     _render();
 
@@ -455,6 +457,7 @@ const TabManager = (() => {
       if (tab) {
         currentCatId = tab.catId;
         navStack = tab.navStack.slice();
+        applySearchSnapshot(tab.search);
         renderTree();
         renderBreadcrumb();
         renderContentList();
@@ -478,6 +481,7 @@ const TabManager = (() => {
         navStack: navStack.slice(),
         label: _labelFor(currentCatId),
         scrollTop: 0,
+        search: getSearchSnapshot(),
       };
       _tabs.push(firstTab);
       _activeId = firstTab.id;
@@ -492,13 +496,15 @@ const TabManager = (() => {
       navStack: buildBreadcrumb(catId),
       label: _labelFor(catId),
       scrollTop: 0,
+      search: { query: '', scopeId: null },
     };
     _tabs.push(newTab);
     _activeId = newTab.id;
 
-    // Navigate to the folder
+    // Navigate to the folder; a new tab always starts in browse mode.
     currentCatId = catId;
     navStack = newTab.navStack.slice();
+    applySearchSnapshot(newTab.search);
     renderTree();
     renderBreadcrumb();
     renderContentList();
@@ -528,7 +534,16 @@ const TabManager = (() => {
     tab.catId    = currentCatId;
     tab.navStack = navStack.slice();
     tab.label    = _labelFor(currentCatId);
+    tab.search   = getSearchSnapshot();
     _render();
+  }
+
+  // ── Called when search state changes without navigation (top search
+  // box, scoped "Search…") so the active tab remembers it. ─
+  function onSearchChange() {
+    if (!_activeId) return;
+    const tab = _tabs.find(t => t.id === _activeId);
+    if (tab) tab.search = getSearchSnapshot();
   }
 
   // ── Reset all tabs (e.g. when a new file is loaded) ───────
@@ -567,7 +582,7 @@ const TabManager = (() => {
     if (toggleBtn) toggleBtn.addEventListener('click', () => setEnabled(!TABS_ENABLED));
   }
 
-  return { init, reset, openInNewTab, openCurrentAsNewTab, onNavigate, isEnabled };
+  return { init, reset, openInNewTab, openCurrentAsNewTab, onNavigate, onSearchChange, isEnabled };
 })();
 // ── END TAB SYSTEM ──────────────────────────────────────────
 
@@ -596,6 +611,10 @@ const SplitScreen = (() => {
   let _catId     = null;    // folder being shown in the right pane
   let _sortKey   = 'name';  // sort state, independent of main pane
   let _sortAsc   = true;
+  // Scoped search ("Search…" launched from a split-pane folder). Independent
+  // of the main pane's search.
+  let _searchQuery   = '';
+  let _searchScopeId = null;
 
   // ── Helpers ───────────────────────────────────────────────
   function _folderIcon() {
@@ -715,9 +734,29 @@ const SplitScreen = (() => {
   // ── Get sorted contents for the split pane ────────────────
   // Uses its own sort state but shares the same global data maps.
   function _getSortedContents(catId) {
-    if (!catId) return [];
-    const folders = (catChildren[catId] || []).map(id => ({ _isFolder: true, _id: id, ...catMap[id] }));
-    const its = catItems[catId] || [];
+    let folders, its;
+    if (_searchQuery && _searchScopeId) {
+      // Recursive scoped search — flatten the subtree, match names with the
+      // shared engine (regex mode is honoured via buildMatcher). Scope root
+      // excluded; it's the container, not a result.
+      const matcher  = buildMatcher(_searchQuery);
+      const scopeSet = collectSubtreeFolderIds(_searchScopeId);
+      folders = [];
+      its = [];
+      for (const id of scopeSet) {
+        const f = catMap[id];
+        if (id !== _searchScopeId && f && matcher((f.name || '').toLowerCase())) {
+          folders.push({ _isFolder: true, _id: id, ...f });
+        }
+        for (const item of (catItems[id] || [])) {
+          if (matcher((item.name || '').toLowerCase())) its.push(item);
+        }
+      }
+    } else {
+      if (!catId) return [];
+      folders = (catChildren[catId] || []).map(id => ({ _isFolder: true, _id: id, ...catMap[id] }));
+      its = catItems[catId] || [];
+    }
     const sortFn = (a, b) => {
       if (_sortKey === 'name') {
         return _sortAsc ? naturalCompare(a.name || '', b.name || '') : naturalCompare(b.name || '', a.name || '');
@@ -756,7 +795,9 @@ const SplitScreen = (() => {
     if (colHeader) colHeader.style.display = (viewMode === 'icons') ? 'none' : '';
 
     if (contents.length === 0) {
-      listEl.innerHTML = '<div class="empty-state"><div class="es-icon">📭</div><div class="es-text">This folder is empty</div></div>';
+      listEl.innerHTML = _searchQuery
+        ? `<div class="empty-state"><div class="es-icon">🔍</div><div class="es-text">No results for <strong>"${escHtml(_searchQuery)}"</strong></div></div>`
+        : '<div class="empty-state"><div class="es-icon">📭</div><div class="es-text">This folder is empty</div></div>';
       return;
     }
 
@@ -890,15 +931,37 @@ const SplitScreen = (() => {
   // ── Update the pane header to show current folder name ────
   function _updateHeader() {
     const titleEl = document.getElementById('split-pane-title');
-    if (!titleEl || !_catId) return;
-    const cat = catMap[_catId];
-    titleEl.textContent = cat ? (cat.name || '(unnamed)') : '—';
-    titleEl.title = cat ? (cat.name || '(unnamed)') : '';
+    if (!titleEl) return;
+    const scopeId = _searchQuery ? _searchScopeId : _catId;
+    const cat = scopeId ? catMap[scopeId] : null;
+    const name = cat ? (cat.name || '(unnamed)') : '—';
+
+    titleEl.textContent = '';
+    if (_searchQuery) {
+      // Badge doubles as the clear control: clicking it exits search back to
+      // a plain browse of the searched folder.
+      const badge = document.createElement('span');
+      badge.className = 'bc-search-badge clearable';
+      badge.textContent = 'Search Results';
+      badge.title = 'Clear search and return to browsing';
+      badge.addEventListener('click', () => { if (_searchScopeId) _openFolder(_searchScopeId); });
+      const scope = document.createElement('span');
+      scope.className = 'split-title-scope';
+      scope.textContent = 'in ' + name;
+      titleEl.appendChild(badge);
+      titleEl.appendChild(scope);
+    } else {
+      titleEl.textContent = name;
+    }
+    titleEl.title = name;
   }
 
   // ── Internal: navigate within the split pane ──────────────
+  // Navigating exits any active scoped search (back to browse mode).
   function _openFolder(catId) {
     if (!catId || !catMap[catId]) return;
+    _searchQuery = '';
+    _searchScopeId = null;
     _catId = catId;
     _updateHeader();
     _renderList();
@@ -911,6 +974,8 @@ const SplitScreen = (() => {
     _ensureDetailMainWrapper();
     _ensureSplitDOM();
 
+    _searchQuery = '';
+    _searchScopeId = null;
     _catId = catId;
 
     // Activate the split layout
@@ -923,10 +988,34 @@ const SplitScreen = (() => {
     _renderList();
   }
 
+  // ── Public: open the split pane in scoped-search mode ─────
+  function openSearch(scopeId, query) {
+    if (!SPLIT_SCREEN_ENABLED || !scopeId || !catMap[scopeId] || !query) return;
+
+    _ensureDetailMainWrapper();
+    _ensureSplitDOM();
+
+    _catId         = scopeId;   // drop/selection origin = the searched folder
+    _searchScopeId = scopeId;
+    _searchQuery   = query;
+
+    const dp = document.getElementById('detail-panel');
+    dp.classList.add('split-active');
+    _open = true;
+
+    _syncToggleBtn();
+    _updateHeader();
+    _renderList();
+  }
+
+  function isSearching() { return !!_searchQuery; }
+
   // ── Public: close the split pane ──────────────────────────
   function close() {
     _open = false;
     _catId = null;
+    _searchQuery = '';
+    _searchScopeId = null;
     const dp = document.getElementById('detail-panel');
     if (dp) dp.classList.remove('split-active');
     _syncToggleBtn();
@@ -950,6 +1039,8 @@ const SplitScreen = (() => {
   function reset() {
     _open = false;
     _catId = null;
+    _searchQuery = '';
+    _searchScopeId = null;
     const dp = document.getElementById('detail-panel');
     if (dp) dp.classList.remove('split-active');
     _syncToggleBtn();
@@ -988,7 +1079,7 @@ const SplitScreen = (() => {
     if (_open && _catId) _renderList();
   }
 
-  return { init, openFolder, close, isOpen, isEnabled, setEnabled, reset, refresh };
+  return { init, openFolder, openSearch, isSearching, close, isOpen, isEnabled, setEnabled, reset, refresh };
 })();
 // ── END SPLIT SCREEN ────────────────────────────────────────
 
@@ -1008,6 +1099,7 @@ let navStack = [];          // breadcrumb stack [{id,name}]
 let sortKey = 'name';
 let sortAsc = true;
 let searchQuery = '';
+let searchScopeId = null;   // folder UUID a scoped "Search…" is rooted at; null = global
 let expandedNodes = new Set();
 // DEFAULT_VIEW: change 'icons' to 'list' to flip the default
 const DEFAULT_VIEW = 'icons';
@@ -1037,7 +1129,24 @@ function getCachedMatcher() {
 let _searchCache = { key: null, result: null };
 let _searchDebounceTimer = null;
 function _searchCacheKey() {
-  return searchQuery + '|' + regexMode + '|' + sortKey + '|' + sortAsc + '|' + [...activeTypeFilter].sort().join(',');
+  return searchQuery + '|' + regexMode + '|' + sortKey + '|' + sortAsc + '|' + [...activeTypeFilter].sort().join(',') + '|' + (searchScopeId || '');
+}
+
+// Collect the set of folder UUIDs in the subtree rooted at scopeId (inclusive).
+// Iterative BFS over catChildren with a visited guard. Used to restrict a
+// scoped "Search…" to a folder and all of its descendants.
+function collectSubtreeFolderIds(scopeId) {
+  const set = new Set();
+  if (!scopeId || !catMap[scopeId]) return set;
+  const stack = [scopeId];
+  while (stack.length) {
+    const id = stack.pop();
+    if (set.has(id)) continue;
+    set.add(id);
+    const children = catChildren[id];
+    if (children) for (const childId of children) stack.push(childId);
+  }
+  return set;
 }
 
 // Memoization cache for countDescendantItems — invalidated on buildIndex()
@@ -1291,10 +1400,13 @@ selectedIndex = -1;
 // Always clear search when navigating into a folder so the contents are visible
 if (searchQuery) {
   searchQuery = '';
+  searchScopeId = null;
   _searchCache = { key: null, result: null };
   clearTimeout(_searchDebounceTimer);
   const searchEl = document.getElementById('search');
   if (searchEl) searchEl.value = '';
+  const clearEl = document.getElementById('search-clear');
+  if (clearEl) clearEl.classList.remove('visible');
   document.getElementById('status-filter').textContent = '';
 }
 
@@ -1367,6 +1479,39 @@ function getBcExpandMenu() {
 function renderBreadcrumb() {
 const bc = document.getElementById('breadcrumb');
 bc.innerHTML = '';
+
+// Search mode: the "Search Results" badge doubles as the clear control
+// (✕ prefix added via CSS). For a scoped search it's followed by "in
+// <clickable scope path>". Clicking a path segment navigates there.
+if (searchQuery) {
+  const badge = document.createElement('span');
+  badge.className = 'bc-search-badge clearable';
+  badge.textContent = 'Search Results';
+  badge.title = 'Clear search and return to browsing';
+  badge.addEventListener('click', () => clearMainSearch());
+  bc.appendChild(badge);
+
+  if (searchScopeId && catMap[searchScopeId]) {
+    const inSep = document.createElement('span');
+    inSep.className = 'bc-search-in';
+    inSep.textContent = 'in';
+    bc.appendChild(inSep);
+
+    const scopePath = buildBreadcrumb(searchScopeId);
+    const sLast = scopePath.length - 1;
+    scopePath.forEach((seg, i) => {
+      if (i > 0) { const s = document.createElement('span'); s.className='bc-sep'; s.textContent='›'; bc.appendChild(s); }
+      const el = document.createElement('span');
+      el.className = 'bc-item' + (i === sLast ? ' current' : '');
+      el.textContent = seg.name;
+      el.title = seg.name;
+      el.addEventListener('click', () => navigateTo(seg.id, true, null));
+      bc.appendChild(el);
+    });
+  }
+  return;
+}
+
 if (!navStack.length) return;
 
 const MAX_VISIBLE = 7; // show at most this many segments before collapsing
@@ -1546,14 +1691,21 @@ const matcher = getCachedMatcher();
 let folders, its;
 
 if (searchQuery) {
-  // Use pre-built flat index — avoids Object.entries/Object.values on every keystroke
+  // Use pre-built flat index — avoids Object.entries/Object.values on every keystroke.
+  // Scoped search ("Search…" context menu): restrict the scan to the subtree
+  // rooted at searchScopeId. The scope root itself is excluded from results.
+  const scopeSet = searchScopeId ? collectSubtreeFolderIds(searchScopeId) : null;
   const matchedFolderIds = new Set();
   const matchedItems = [];
   for (const { id, nameLower } of _searchFolders) {
-    if (matcher(nameLower)) matchedFolderIds.add(id);
+    if (!matcher(nameLower)) continue;
+    if (scopeSet && (id === searchScopeId || !scopeSet.has(id))) continue;
+    matchedFolderIds.add(id);
   }
   for (const { item, nameLower } of _searchItems) {
-    if (matcher(nameLower)) matchedItems.push(item);
+    if (!matcher(nameLower)) continue;
+    if (scopeSet && !scopeSet.has(item.parent_id)) continue;
+    matchedItems.push(item);
   }
   folders = [...matchedFolderIds].map(id => ({ _isFolder: true, _id: id, ...catMap[id] }));
   its = matchedItems;
@@ -3115,12 +3267,201 @@ localStorage.setItem('sl_inv_tree_open', isHidden ? '1' : '0');
 // ============================================================
 // Context menu
 // ============================================================
+// ============================================================
+// Scoped folder search ("Search…" context-menu action)
+// ============================================================
+// Clear the main-pane search (top box or scoped) and return to browsing.
+// Shared by the search-box ✕ and the breadcrumb "Search Results" badge.
+function clearMainSearch() {
+  const input = document.getElementById('search');
+  if (input) input.value = '';
+  searchQuery = '';
+  searchScopeId = null;
+  _searchCache = { key: null, result: null };
+  clearTimeout(_searchDebounceTimer);
+  const clearBtn = document.getElementById('search-clear');
+  if (clearBtn) clearBtn.classList.remove('visible');
+  document.getElementById('status-filter').textContent = '';
+  renderContentList();
+  renderBreadcrumb();
+  updateStatus();
+  TabManager.onSearchChange();
+}
+
+// Per-tab search snapshot helpers.
+function getSearchSnapshot() {
+  return { query: searchQuery, scopeId: searchScopeId };
+}
+function applySearchSnapshot(snap) {
+  searchQuery   = (snap && snap.query) || '';
+  searchScopeId = (snap && snap.scopeId) || null;
+  _searchCache = { key: null, result: null };
+  clearTimeout(_searchDebounceTimer);
+  const input = document.getElementById('search');
+  if (input) input.value = searchQuery;
+  const clearBtn = document.getElementById('search-clear');
+  if (clearBtn) clearBtn.classList.toggle('visible', searchQuery.length > 0);
+}
+
+// Enter scoped search in the main pane (active tab) for the given folder.
+function enterScopedSearch(folderId, query) {
+  if (!catMap[folderId] || !query) return;
+  searchQuery = query;
+  searchScopeId = folderId;
+  _searchCache = { key: null, result: null };
+  clearTimeout(_searchDebounceTimer);
+  selectedItem = null; selectedIsFolder = false; selectedIndex = -1;
+  const input = document.getElementById('search');
+  if (input) input.value = query;
+  const clearBtn = document.getElementById('search-clear');
+  if (clearBtn) clearBtn.classList.add('visible');
+  renderContentList();
+  renderBreadcrumb();
+  updateDetailSide(null);
+  const contents = getSortedContents(currentCatId);
+  document.getElementById('status-filter').textContent =
+    `Search: "${query}" — ${contents.length.toLocaleString()} results`;
+  updateStatus();
+  TabManager.onSearchChange();
+}
+
+// Open the search popup for a folder, then route the query to the right view.
+function openFolderSearch(folderId, fromSplit) {
+  const cat = catMap[folderId];
+  if (!cat) return;
+  openFolderSearchPopup({
+    folderName: cat.name || '(unnamed)',
+    onSubmit: (query) => {
+      if (fromSplit && SplitScreen.isEnabled()) {
+        SplitScreen.openSearch(folderId, query);
+      } else {
+        enterScopedSearch(folderId, query);
+      }
+    },
+  });
+}
+
+// ── Folder search popup ──────────────────────────────────────
+// A non-modal floating window (no backdrop / no dimming) with a
+// close ✕, Cancel, and Search button. Enter submits, Esc closes.
+// Reuses the global search engine: it only collects a query string.
+let _fspEl = null, _fspOnSubmit = null, _fspPlaced = false, _fspKeydown = null;
+
+function _buildFolderSearchPopup() {
+  if (_fspEl) return _fspEl;
+  const el = document.createElement('div');
+  el.id = 'folder-search-popup';
+  el.className = 'hidden';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', 'Search folder');
+  el.innerHTML = `
+    <div class="fsp-header">
+      <span class="fsp-title"></span>
+      <button class="fsp-close" type="button" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="fsp-body">
+      <input class="fsp-input" type="text" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="fsp-footer">
+      <button class="btn fsp-cancel" type="button">Cancel</button>
+      <button class="btn primary fsp-search" type="button">Search</button>
+    </div>
+  `;
+  document.body.appendChild(el);
+  _fspEl = el;
+
+  el.querySelector('.fsp-close').addEventListener('click', _closeFolderSearchPopup);
+  el.querySelector('.fsp-cancel').addEventListener('click', _closeFolderSearchPopup);
+  el.querySelector('.fsp-search').addEventListener('click', _submitFolderSearchPopup);
+
+  const input = el.querySelector('.fsp-input');
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter')       { e.preventDefault(); _submitFolderSearchPopup(); }
+    else if (e.key === 'Escape') { e.preventDefault(); _closeFolderSearchPopup(); }
+  });
+
+  // Drag by header (skip the close button).
+  const handle = el.querySelector('.fsp-header');
+  let sx = 0, sy = 0, sl = 0, st = 0;
+  function onMove(e) {
+    const left = sl + (e.clientX - sx);
+    const top  = st + (e.clientY - sy);
+    const maxLeft = window.innerWidth  - el.offsetWidth - 4;
+    const maxTop  = window.innerHeight - el.offsetHeight - 4;
+    el.style.left = Math.max(4, Math.min(maxLeft, left)) + 'px';
+    el.style.top  = Math.max(4, Math.min(maxTop, top)) + 'px';
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+  handle.addEventListener('mousedown', e => {
+    if (e.target.closest('.fsp-close')) return;
+    e.preventDefault();
+    const r = el.getBoundingClientRect();
+    sx = e.clientX; sy = e.clientY; sl = r.left; st = r.top;
+    el.style.left = r.left + 'px';
+    el.style.top  = r.top + 'px';
+    el.style.transform = 'none';
+    _fspPlaced = true;
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  return el;
+}
+
+function _submitFolderSearchPopup() {
+  if (!_fspEl) return;
+  const input = _fspEl.querySelector('.fsp-input');
+  const query = input.value.trim();
+  if (!query) { input.focus(); return; }
+  const cb = _fspOnSubmit;
+  _closeFolderSearchPopup();
+  if (cb) cb(query);
+}
+
+function _closeFolderSearchPopup() {
+  if (!_fspEl) return;
+  _fspEl.classList.add('hidden');
+  _fspOnSubmit = null;
+  if (_fspKeydown) {
+    document.removeEventListener('keydown', _fspKeydown, { capture: true });
+    _fspKeydown = null;
+  }
+}
+
+function openFolderSearchPopup(opts) {
+  opts = opts || {};
+  const el = _buildFolderSearchPopup();
+  _fspOnSubmit = typeof opts.onSubmit === 'function' ? opts.onSubmit : null;
+
+  el.querySelector('.fsp-title').innerHTML =
+    'Search in <strong>' + escHtml(opts.folderName || '(unnamed)') + '</strong>';
+  const input = el.querySelector('.fsp-input');
+  input.value = opts.initialQuery || '';
+  input.placeholder = 'Search this folder and subfolders…';
+
+  if (!_fspPlaced) {
+    el.style.left = '50%';
+    el.style.top  = '32%';
+    el.style.transform = 'translate(-50%, -50%)';
+  }
+  el.classList.remove('hidden');
+
+  _fspKeydown = e => { if (e.key === 'Escape') { e.preventDefault(); _closeFolderSearchPopup(); } };
+  document.addEventListener('keydown', _fspKeydown, { capture: true });
+
+  requestAnimationFrame(() => { input.focus(); input.select(); });
+}
+
 let _ctxEntry = null; // the entry the menu was opened on
+let _ctxFromSplit = false; // was the menu opened from inside the split pane?
 
 function showContextMenu(e, entry) {
   e.preventDefault();
   e.stopPropagation();
   _ctxEntry = entry;
+  _ctxFromSplit = !!(e.target && e.target.closest && e.target.closest('#split-pane'));
 
   const menu       = document.getElementById('ctx-menu');
   const copyId     = document.getElementById('ctx-copy-id');
@@ -3150,6 +3491,12 @@ function showContextMenu(e, entry) {
   const hasParent = parentId && catMap[parentId];
   openLoc.classList.toggle('disabled', !hasParent);
 
+  // "Open File/Folder Location" only makes sense when the listing is detached
+  // from the tree position: in Search mode (results are flattened) or in the
+  // Split Screen pane. Hidden during normal main-pane browsing.
+  const showOpenLoc = !!searchQuery || _ctxFromSplit;
+  openLoc.style.display = showOpenLoc ? '' : 'none';
+
   // ── TAB SYSTEM: show "Open in New Tab" only for folders when tabs are enabled ──
   const tabSep  = document.getElementById('ctx-tab-sep');
   const tabItem = document.getElementById('ctx-open-new-tab');
@@ -3171,6 +3518,19 @@ function showContextMenu(e, entry) {
   if (splitSep)  splitSep.style.display  = showSplit ? '' : 'none';
   if (splitItem) splitItem.style.display = showSplit ? '' : 'none';
   // ── END SPLIT SCREEN ──
+
+  // ── Search… ── folders only; hidden when the target view (split pane vs.
+  // main/tab) is already in search mode. Works offline (.gz upload).
+  const targetInSearch = _ctxFromSplit ? SplitScreen.isSearching() : !!searchQuery;
+  const searchFolderId = entry._isFolder
+    ? (entry._id || entry.cat_id || entry.category_id)
+    : null;
+  const showSearch = !!entry._isFolder && !targetInSearch
+    && !!searchFolderId && !!catMap[searchFolderId];
+  const searchSep  = document.getElementById('ctx-search-sep');
+  const searchItem = document.getElementById('ctx-search');
+  if (searchSep)  searchSep.style.display  = showSearch ? '' : 'none';
+  if (searchItem) searchItem.style.display = showSearch ? '' : 'none';
 
   // Position — keep menu inside viewport
   // Use getBoundingClientRect after making items visible so height is accurate
@@ -3368,6 +3728,30 @@ function initContextMenu() {
     SplitScreen.openFolder(folderId);
   });
   // ── END SPLIT SCREEN ────────────────────────────────────────
+
+  // ── Search… (folder-only; recursive scoped search) ──────────
+  // Inserted right after "Open Folder Location" so it sits near the top.
+  const searchSep = document.createElement('div');
+  searchSep.id        = 'ctx-search-sep';
+  searchSep.className = 'ctx-sep';
+  searchSep.style.display = 'none';
+  openLoc.insertAdjacentElement('afterend', searchSep);
+
+  const searchItem = document.createElement('div');
+  searchItem.id        = 'ctx-search';
+  searchItem.className = 'ctx-item';
+  searchItem.textContent = 'Search…';
+  searchItem.style.display = 'none';
+  searchSep.insertAdjacentElement('afterend', searchItem);
+
+  searchItem.addEventListener('click', () => {
+    if (!_ctxEntry || !_ctxEntry._isFolder) return;
+    const folderId = _ctxEntry._id || _ctxEntry.cat_id || _ctxEntry.category_id;
+    const fromSplit = _ctxFromSplit;
+    hideContextMenu();
+    if (!folderId || !catMap[folderId]) return;
+    openFolderSearch(folderId, fromSplit);
+  });
 
   // Dismiss on click outside or Escape
   document.addEventListener('click', e => {
@@ -3647,14 +4031,8 @@ document.getElementById('btn-regex').addEventListener('click', () => {
 
 const searchClear = document.getElementById('search-clear');
 searchClear.addEventListener('click', () => {
-  const input = document.getElementById('search');
-  input.value = '';
-  searchQuery = '';
-  searchClear.classList.remove('visible');
-  document.getElementById('status-filter').textContent = '';
-  renderContentList();
-  updateStatus();
-  input.focus();
+  clearMainSearch();
+  document.getElementById('search').focus();
 });
 
 document.getElementById('search').addEventListener('input', e => {
@@ -3667,10 +4045,13 @@ document.getElementById('search').addEventListener('input', e => {
   // Instant UI feedback: clear the pane immediately when query is cleared
   if (!raw) {
     searchQuery = '';
+    searchScopeId = null;
     _searchCache = { key: null, result: null };
     document.getElementById('status-filter').textContent = '';
     renderContentList();
+    renderBreadcrumb();
     updateStatus();
+    TabManager.onSearchChange();
     return;
   }
 
@@ -3686,8 +4067,10 @@ document.getElementById('search').addEventListener('input', e => {
   // so intermediate characters are skipped entirely on large inventories.
   _searchDebounceTimer = setTimeout(() => {
     searchQuery = raw;
+    searchScopeId = null;   // top search box is always global
     _searchCache = { key: null, result: null };
     renderContentList();
+    renderBreadcrumb();
     // Status bar reuses the now-cached result — no second scan
     if (searchQuery) {
       const contents = getSortedContents(currentCatId);
@@ -3695,6 +4078,7 @@ document.getElementById('search').addEventListener('input', e => {
         `Search: "${searchQuery}" — ${contents.length.toLocaleString()} results`;
     }
     updateStatus();
+    TabManager.onSearchChange();
   }, 300);
 });
 
