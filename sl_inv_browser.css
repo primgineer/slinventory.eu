@@ -705,8 +705,12 @@ kbd {
   overflow: hidden;
 }
 
-/* Left content area — normal content list wrapper, constrained in split mode */
-#detail-panel.split-active .detail-main {
+/* Left content area — flex-column host for breadcrumb, column header, and
+   content list. Installed once by SplitScreen on first open and left in place
+   for the session, so it must behave as a flex column whether or not the split
+   pane is currently active; otherwise #content-list loses its scroll context
+   after the split is closed. */
+#detail-panel .detail-main {
   flex: 1;
   display: flex;
   flex-direction: column;
