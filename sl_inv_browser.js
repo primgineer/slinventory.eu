@@ -179,6 +179,10 @@ script:       `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect
 landmark:     `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5a4.5 4.5 0 0 0-4.5 4.5C3.5 9.5 8 14.5 8 14.5s4.5-5 4.5-8.5A4.5 4.5 0 0 0 8 1.5z" fill="#e85555" opacity=".2" stroke="#e85555" stroke-width="1.2"/><circle cx="8" cy="6" r="1.5" fill="#e85555" opacity=".8"/></svg>`,
 clothing:     `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 2l-3 3 2 1v7h8V6l2-1-3-3-2 1.5L8 5.5 7 3.5 5 2z" fill="#4a9eff" opacity=".2" stroke="#4a9eff" stroke-width="1.2" stroke-linejoin="round"/></svg>`,
 bodypart:     `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="4.5" r="2" fill="#9b6dff" opacity=".8"/><path d="M4 14c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="#9b6dff" stroke-width="1.2" stroke-linecap="round" fill="none"/></svg>`,
+shape:        `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="3.3" r="1.9" fill="#9b6dff" opacity=".85"/><path d="M8 5.4v4.4M8 6.6L4.6 8.2M8 6.6l3.4 1.6M8 9.8l-2.2 4.4M8 9.8l2.2 4.4" stroke="#9b6dff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+skin:         `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2.3c-2.5 0-4.2 1.9-4.2 4.7 0 3.1 1.9 6.5 4.2 6.5s4.2-3.4 4.2-6.5C12.2 4.2 10.5 2.3 8 2.3z" fill="#9b6dff" opacity=".2" stroke="#9b6dff" stroke-width="1.2" stroke-linejoin="round"/><circle cx="6.4" cy="7.2" r=".7" fill="#9b6dff" opacity=".85"/><circle cx="9.6" cy="7.2" r=".7" fill="#9b6dff" opacity=".85"/><path d="M6.5 9.9c.85.8 2.15.8 3 0" stroke="#9b6dff" stroke-width="1.1" stroke-linecap="round" fill="none"/></svg>`,
+hair:         `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none"><ellipse cx="8" cy="9.3" rx="3.99" ry="4.8" fill="#9b6dff" opacity=".2"/><path d="M4.2 13C3.6 11.4 3.2 9.3 3.2 7 3.2 4.2 5 2.2 8 2.2c2.8 0 4.6 1.4 5.2 3.8.4 1.8.2 4.2-.3 6.2l-1.4.3c.4-1.2.6-2.5.5-3.7-.1-1.2-.5-2.1-1.4-2.3-2.2.7-4 1.6-5.3 1.7-.3 1.2-.1 2.8.4 4.5L4.2 13z" fill="#9b6dff" opacity=".85"/></svg>`,
+eyes:         `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1.4 8C2.9 5.4 5.2 4 8 4s5.1 1.4 6.6 4C13.1 10.6 10.8 12 8 12S2.9 10.6 1.4 8z" fill="#9b6dff" opacity=".18" stroke="#9b6dff" stroke-width="1.2" stroke-linejoin="round"/><circle cx="8" cy="8" r="2.1" fill="#9b6dff" opacity=".85"/><circle cx="8.7" cy="7.3" r=".55" fill="#fff" opacity=".9"/></svg>`,
 animation:    `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="3" r="1.5" fill="#e8a630" opacity=".8"/><path d="M5 5v4M5 9l-2 3M5 9l2 3M3 7h4" stroke="#e8a630" stroke-width="1.2" stroke-linecap="round"/><path d="M11 2l3 3-3 3M8 5h3" stroke="#e8a630" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity=".6"/></svg>`,
 gesture:      `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M7 3.5V9M9 4.5V9M11 5.5V9M5 6.5V9M5 9c0 2.5 1.5 4.5 6 4.5S13 11 13 9" stroke="#3dba7f" stroke-width="1.2" stroke-linecap="round"/></svg>`,
 mesh:         `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2l5 3v6l-5 3-5-3V5l5-3z" fill="none" stroke="#2dbdba" stroke-width="1.2"/><path d="M3 5l5 3m0 0l5-3m-5 3v6" stroke="#2dbdba" stroke-width="1" opacity=".5"/></svg>`,
@@ -237,9 +241,92 @@ function getIconForCategory(folderType) {
   return ICONS[map[t] || 'folder'];
 }
 
-// getIconForItem now accepts a canonical _typeKey string (resolved at index time).
-// No more raw field parsing needed here.
-function getIconForItem(typeKey) {
+// ── Wearable subtype (shape/skin/hair/eyes) ─────────────────────────────────
+// flags & 0xff stores LLWearableType (llwearabletype.cpp:130-133).
+const WEARABLE_TYPES = {
+  0:'shape', 1:'skin', 2:'hair', 3:'eyes',
+  4:'shirt', 5:'pants', 6:'shoes', 7:'socks', 8:'jacket',
+  9:'gloves', 10:'undershirt', 11:'underpants', 12:'skirt',
+  13:'alpha', 14:'tattoo', 15:'physics', 16:'universal',
+};
+
+// Offline JSON encodes flags as base64 big-endian uint32 (e.g. "AAAAAw==").
+function decodeFlags(raw) {
+  if (raw == null) return 0;
+  if (typeof raw === 'number') return raw;
+  const s = String(raw);
+  if (/^[A-Za-z0-9+/=]+$/.test(s) && s.length >= 4 && /=$/.test(s)) {
+    try {
+      const bin = atob(s);
+      let n = 0;
+      for (let i = 0; i < bin.length; i++) n = (n << 8) | bin.charCodeAt(i);
+      return n >>> 0;
+    } catch { /* fall through */ }
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function getWearableSubtype(item) {
+  return WEARABLE_TYPES[decodeFlags(item?.flags) & 0xff] || null;
+}
+
+// ── shadow_id decoder ───────────────────────────────────────────────────────
+// In .inv.llsd cache files, link items don't carry asset_id in cleartext —
+// it's XOR-encrypted as `shadow_id` with a fixed magic UUID. See
+// indra/llinventory/llinventory.cpp:73,725-728. Decoding yields the asset_id,
+// which for links == the target item's UUID.
+const SHADOW_MAGIC_UUID = '3c115e51-04f4-523c-9fa6-98aff1034730';
+
+function _uuidToBytes(uuid) {
+  const hex = String(uuid).replace(/-/g, '');
+  if (hex.length !== 32) return null;
+  const out = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) {
+    const b = parseInt(hex.substr(i * 2, 2), 16);
+    if (Number.isNaN(b)) return null;
+    out[i] = b;
+  }
+  return out;
+}
+
+function _bytesToUuid(bytes) {
+  const h = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+
+const _SHADOW_MAGIC_BYTES = _uuidToBytes(SHADOW_MAGIC_UUID);
+
+function decodeShadowId(shadowId) {
+  if (!shadowId || shadowId === '00000000-0000-0000-0000-000000000000') return null;
+  const sb = _uuidToBytes(shadowId);
+  if (!sb) return null;
+  const out = new Uint8Array(16);
+  for (let i = 0; i < 16; i++) out[i] = sb[i] ^ _SHADOW_MAGIC_BYTES[i];
+  return _bytesToUuid(out);
+}
+
+// getIconForItem accepts a canonical _typeKey string and an optional item object.
+// For bodypart items, resolves the wearable subtype icon via flags.
+// For link items, dereferences via linked_id (live) or shadow_id (offline).
+function getIconForItem(typeKey, item = null) {
+  if (item != null) {
+    const linkTargetId = item.linked_id
+      || (item.shadow_id ? decodeShadowId(item.shadow_id) : null);
+    const target = linkTargetId ? itemMap[linkTargetId] : null;
+    if (target) {
+      const targetKey = target._typeKey || typeKey;
+      if (targetKey === 'bodypart') {
+        const subtype = getWearableSubtype(target);
+        if (subtype && ICONS[subtype]) return ICONS[subtype];
+      }
+      if (ICONS[targetKey]) return ICONS[targetKey];
+    }
+  }
+  if (typeKey === 'bodypart' && item != null) {
+    const subtype = getWearableSubtype(item);
+    if (subtype && ICONS[subtype]) return ICONS[subtype];
+  }
   return ICONS[typeKey] || ICONS.unknown;
 }
 
@@ -836,7 +923,7 @@ const SplitScreen = (() => {
         } else {
           const thumbBox = document.createElement('div');
           thumbBox.className = 'thumb-box';
-          const iconSvg = getIconForItem(tk);
+          const iconSvg = getIconForItem(tk, entry);
           const objThumbId = entry.thumbnail?.asset_id &&
             entry.thumbnail.asset_id !== '00000000-0000-0000-0000-000000000000'
             ? entry.thumbnail.asset_id : null;
@@ -894,7 +981,7 @@ const SplitScreen = (() => {
 
         const ft = entry.preferred_type ?? entry.type_default ?? -1;
         const tk = entry._typeKey || 'unknown';
-        const iconSvg  = entry._isFolder ? getIconForCategory(ft) : getIconForItem(tk);
+        const iconSvg  = entry._isFolder ? getIconForCategory(ft) : getIconForItem(tk, entry);
         const typeName = entry._isFolder ? getFolderTypeName(ft) : getTypeKeyName(tk);
         const date     = entry.creation_date ? formatDate(entry.creation_date) : '—';
         const countVal = entry._isFolder
@@ -1090,6 +1177,7 @@ let invData = null;         // raw parsed JSON {categories:[], items:[]}
 let catMap = {};            // cat_id → category obj
 let catChildren = {};       // cat_id → [cat_id,...]
 let catItems = {};          // cat_id → [item obj,...]
+let itemMap = {};           // item_id → item obj (flat, for link-target lookup)
 let rootCatId = null;
 let currentCatId = null;
 let selectedItem = null;
@@ -1189,7 +1277,7 @@ function isSystemFolder(catId) {
 }
 
 function buildIndex(data) {
-catMap = {}; catChildren = {}; catItems = {};
+catMap = {}; catChildren = {}; catItems = {}; itemMap = {};
 rootCatId = null;
 _descendantCountCache = {};
 
@@ -1216,6 +1304,8 @@ for (const item of (data.items || [])) {
   item._typeKey = resolveTypeKey(item); // canonical, resolved once
   const pid = item.parent_id;
   if (pid && catItems[pid]) catItems[pid].push(item);
+  const iid = item.item_id || item.id;
+  if (iid) itemMap[iid] = item;
 }
 
 // Sort children by name using natural sort (numbers compared numerically)
@@ -1654,9 +1744,21 @@ const ASSET_TYPE_MAP = {
 };
 
 function resolveTypeKey(item) {
-  // inv_type is authoritative — it distinguishes texture vs snapshot, etc.
+  // IT_WEARABLE (inv_type 18 / 'wearable') covers BOTH clothing and bodypart;
+  // only asset type disambiguates (AT_CLOTHING=5, AT_BODYPART=13).
+  // See llinventorytype.cpp:83 / llassettype.cpp.
   if (item.inv_type != null) {
-    const k = INV_TYPE_MAP[String(item.inv_type).toLowerCase()];
+    const ivLower = String(item.inv_type).toLowerCase();
+    if (ivLower === '18' || ivLower === 'wearable') {
+      const t = item.type;
+      if (t != null) {
+        const tLower = String(t).toLowerCase();
+        if (tLower === '13' || tLower === 'bodypart' || tLower === 'body_part') return 'bodypart';
+        if (tLower === '5'  || tLower === 'clothing') return 'clothing';
+      }
+      return 'clothing';
+    }
+    const k = INV_TYPE_MAP[ivLower];
     if (k) return k;
   }
   // Fallback to asset type when inv_type is absent (binary LLSD without inv_type)
@@ -1927,7 +2029,7 @@ for (const entry of contents) {
 
   const ft = entry.preferred_type ?? entry.type_default ?? -1;
   const tk = entry._typeKey || 'unknown';
-  const iconSvg = entry._isFolder ? getIconForCategory(ft) : getIconForItem(tk);
+  const iconSvg = entry._isFolder ? getIconForCategory(ft) : getIconForItem(tk, entry);
   const typeName = entry._isFolder ? getFolderTypeName(ft) : getTypeKeyName(tk);
   const date = entry.creation_date ? formatDate(entry.creation_date) : '—';
   const countVal = entry._isFolder
@@ -2305,7 +2407,7 @@ for (const entry of contents) {
     // otherwise fall back to scaled SVG icon in a box
     const thumbBox = document.createElement('div');
     thumbBox.className = 'thumb-box';
-    const iconSvg = getIconForItem(tk);
+    const iconSvg = getIconForItem(tk, entry);
 
     const objThumbId = entry.thumbnail?.asset_id &&
       entry.thumbnail.asset_id !== '00000000-0000-0000-0000-000000000000'
@@ -2536,7 +2638,7 @@ if (entry._isFolder) {
   `;
 } else {
   const tk = entry._typeKey || 'unknown';
-  dsIcon.innerHTML = `<div style="width:32px;height:32px;">${getIconForItem(tk)}</div>`;
+  dsIcon.innerHTML = `<div style="width:32px;height:32px;">${getIconForItem(tk, entry)}</div>`;
   dsName.textContent = entry.name || '(unnamed)';
   dsType.textContent = getTypeKeyName(tk);
 
