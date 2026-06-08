@@ -1,50 +1,110 @@
 /* ============================================================
-   SL Inventory Browser — Dark Theme (default)
+   SL Inventory Browser — Dark Theme (Precision Canvas)
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300..500;1,300..500&display=swap');
 
 :root {
-  /* Backgrounds */
-  --bg:        #0d0f12;
-  --bg1:       #12151a;
-  --bg2:       #181c23;
-  --bg3:       #1e2430;
+  /* ===== PRECISION CANVAS DESIGN TOKENS ===== */
 
-  /* Borders */
-  --border:    #252d3a;
-  --border2:   #2e3a4e;
+  /* Primary Accent */
+  --primary: #4a9eff;
+  --primary-grad: linear-gradient(135deg, #2d6dbf 0%, #4a9eff 100%);
+  --primary-fixed: #1a2a3d;
+  --primary-on-fixed: #c8d4e3;
+
+  /* Surfaces */
+  --surf-dim: #111314;
+  --surf: #191c1d;
+  --surf-low: #1e2122;
+  --surf-lowest: #161819;
+  --surf-hi: #2c2f30;
+  --surf-container: #222527;
 
   /* Text */
-  --text:      #c8d4e3;
-  --text-dim:  #5a6a80;
-  --text-mute: #3a4a5e;
+  --on-surf: #e1e3e4;
+  --on-surf-var: #8b9294;
+  --secondary: #6e797c;
 
-  /* Accent (blue) */
-  --accent:      #4a9eff;
-  --accent2:     #2d6dbf;
+  /* Outline */
+  --outline-var: #3a3f42;
+  --ghost-border: rgba(228, 189, 194, 0.10);
+
+  /* Typography */
+  --font-display: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, monospace;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+  --space-10: 64px;
+
+  /* Shadows */
+  --shadow-ambient: 0px 20px 40px rgba(0, 0, 0, 0.20);
+  --shadow-card: 0px 4px 16px rgba(0, 0, 0, 0.12);
+
+  /* ===== LEGACY COMPATIBILITY (mapped to new tokens) ===== */
+
+  /* Backgrounds (mapped to surfaces) */
+  --bg: var(--surf-dim);
+  --bg1: var(--surf);
+  --bg2: var(--surf-low);
+  --bg3: var(--surf-container);
+
+  /* Borders */
+  --border: var(--ghost-border);
+  --border2: var(--outline-var);
+
+  /* Text (mapped to new text tokens) */
+  --text: var(--on-surf);
+  --text-dim: var(--on-surf-var);
+  --text-mute: var(--secondary);
+
+  /* Accent (mapped to blue) */
+  --accent: var(--primary);
+  --accent2: #2d6dbf; /* darker blue for hover states */
   --accent-glow: rgba(74, 158, 255, 0.12);
+  --im-own-text: #67dbc0; /* keep teal for own chat messages */
 
-  /* Status colours */
-  --green:  #3dba7f;
-  --amber:  #e8a630;
-  --red:    #e85555;
+  /* Status colours (unchanged) */
+  --green: #3dba7f;
+  --amber: #e8a630;
+  --red: #e85555;
   --purple: #9b6dff;
-  --teal:   #2dbdba;
+  --teal: #2dbdba;
 
-  /* Selection */
+  /* Selection (mapped to blue) */
   --selected: rgba(74, 158, 255, 0.10);
-  --hover:    rgba(74, 158, 255, 0.06);
+  --hover: rgba(74, 158, 255, 0.06);
+  --world-map-empty-cell: var(--surf-container);
 
-  /* Layout */
-  --row-h:    26px;
-  --sidebar:  320px;
+  /* Layout (keep existing for compatibility) */
+  --row-h: 26px;
+  --sidebar: 220px; /* reduced per design spec */
   --header-h: 48px;
   --status-h: 28px;
+  --dock-h: 72px;
 
   /* Icon grid */
-  --icon-sz:   100px;
+  --icon-sz: 100px;
   --icon-sz-h: 80px;
+
+  /* Window gradients */
+  --floater-gradient: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 58%);
 }
 
 @media (max-width: 700px) {

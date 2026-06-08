@@ -494,19 +494,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
 .tab-item {
   display: flex; align-items: center; gap: 5px;
-  padding: 0 10px 0 9px; cursor: pointer; flex-shrink: 0;
+  padding: 0 12px 0 10px; cursor: pointer; flex-shrink: 0;
   min-width: 80px; max-width: 200px;
-  border-right: 1px solid var(--border);
-  border-bottom: 2px solid transparent;
-  color: var(--text-dim); font-size: 11px;
-  font-family: 'JetBrains Mono', monospace;
-  transition: color .12s, border-color .12s, background .12s;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  color: var(--on-surf-var); font-size: 11px;
+  font-family: var(--font-mono);
+  transition: color .12s, background .12s;
   user-select: none; position: relative;
 }
-.tab-item:hover { background: var(--hover); color: var(--text); }
+.tab-item:hover { background: var(--hover); color: var(--on-surf); }
 .tab-item.active {
-  color: var(--accent); border-bottom-color: var(--accent);
-  background: var(--bg2);
+  color: var(--active-fg);
+  background: var(--active-bg);
 }
 .tab-item svg { flex-shrink: 0; opacity: .7; }
 .tab-item.active svg { opacity: 1; }
@@ -670,12 +669,12 @@ html[data-font="large"]  .perm-tag                 { font-size: 12px; }
   align-items: baseline; gap: 8px; margin-bottom: 5px;
 }
 .dz-viewer {
-  font-size: 10px; color: var(--text-mute);
+  font-size: 11px; color: var(--secondary);
   text-align: right; flex-shrink: 0;
 }
 .dz-path-row code {
-  font-family: 'JetBrains Mono', monospace; font-size: 11px;
-  color: var(--accent); background: rgba(74,158,255,0.08);
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--accent); background: var(--accent-glow);
   padding: 1px 6px; border-radius: 3px; word-break: break-all;
 }
 .dz-hint {

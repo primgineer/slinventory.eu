@@ -1,50 +1,134 @@
 /* ============================================================
-   SL Inventory Browser — Pink Theme
+   SL Inventory Browser — Pink Theme (Precision Canvas Warm Rose)
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300..500;1,300..500&display=swap');
 
 :root {
-  /* Backgrounds — warm dark rose */
-  --bg:        #12090e;
-  --bg1:       #1a0d13;
-  --bg2:       #221219;
-  --bg3:       #2b1820;
+  /* ===== PRECISION CANVAS DESIGN TOKENS (Warm Rose Variant) ===== */
 
-  /* Borders */
-  --border:    #3a1f2a;
-  --border2:   #4e2938;
+  /* Primary Accent - adapted for warm theme */
+  --primary: #4a9eff;
+  --primary-grad: linear-gradient(135deg, #2d6dbf 0%, #4a9eff 100%);
+  --primary-fixed: #1a2a3d;
+  --primary-on-fixed: #c8d4e3;
+
+  /* Surfaces - warm rose tinted */
+  --surf-dim: #12090e;
+  --surf: #1a0d13;
+  --surf-low: #221219;
+  --surf-lowest: #2b1820;
+  --surf-hi: #3a1f2a;
+  --surf-container: #2e1a23;
 
   /* Text */
-  --text:      #f0d6e0;
-  --text-dim:  #8a5a6e;
-  --text-mute: #5a2e3e;
+  --on-surf: #f0d6e0;
+  --on-surf-var: #d4a6c1; /* even brighter for better visibility */
+  --secondary: #b8819a; /* even brighter for search placeholder */
 
-  /* Accent (pink/rose) */
-  --accent:      #ff6fa8;
-  --accent2:     #c44a7a;
+  /* Outline */
+  --outline-var: #4a4f52;
+  --ghost-border: rgba(228, 189, 194, 0.15);
+
+  /* Typography */
+  --font-display: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, monospace;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+  --space-10: 64px;
+
+  /* Shadows - darker for warm rose theme */
+  --shadow-ambient: 0px 20px 40px rgba(0, 0, 0, 0.30);
+  --shadow-card: 0px 4px 16px rgba(0, 0, 0, 0.20);
+
+  /* ===== LEGACY COMPATIBILITY (mapped to new tokens) ===== */
+
+  /* Backgrounds (mapped to surfaces) */
+  --bg: var(--surf-dim);
+  --bg1: var(--surf);
+  --bg2: var(--surf-low);
+  --bg3: var(--surf-container);
+
+  /* Borders */
+  --border: var(--ghost-border);
+  --border2: var(--outline-var);
+
+  /* Text (mapped to new text tokens) */
+  --text: var(--on-surf);
+  --text-dim: var(--on-surf-var);
+  --text-mute: var(--secondary);
+
+  /* Accent (pink for warm theme) */
+  --accent: #ff6fa8;
+  --accent2: #e55a96; /* darker pink for hover states */
   --accent-glow: rgba(255, 111, 168, 0.12);
+  --im-own-text: #58d4bf; /* keep teal for own chat messages */
 
-  /* Status colours */
-  --green:  #3dba7f;
-  --amber:  #e8a630;
-  --red:    #e85555;
+  /* Status colours (unchanged) */
+  --green: #3dba7f;
+  --amber: #e8a630;
+  --red: #e85555;
   --purple: #c97aff;
-  --teal:   #2dbdba;
+  --teal: #2dbdba;
 
-  /* Selection */
+  /* Selection (pink themed) */
   --selected: rgba(255, 111, 168, 0.10);
-  --hover:    rgba(255, 111, 168, 0.06);
+  --hover: rgba(255, 111, 168, 0.06);
+  --world-map-empty-cell: var(--surf-container);
 
-  /* Layout */
-  --row-h:    26px;
-  --sidebar:  320px;
+  /* Layout (keep existing for compatibility) */
+  --row-h: 26px;
+  --sidebar: 220px; /* reduced per design spec */
   --header-h: 48px;
   --status-h: 28px;
+  --dock-h: 72px;
 
   /* Icon grid */
-  --icon-sz:   100px;
+  --icon-sz: 100px;
   --icon-sz-h: 80px;
+
+  /* Precision Canvas aliases */
+  --active-bg: rgba(255, 111, 168, 0.15);
+  --active-fg: #ff6fa8;
+  --ambient: var(--shadow-ambient);
+
+  /* Pink theme specific overrides for warm harmony */
+  --floater-gradient: linear-gradient(135deg, color-mix(in srgb, #d4a574 16%, transparent), transparent 58%);
+}
+
+/* Keep tabs blue for navigation semantics */
+.pi-tab.active,
+.im-tab.active,
+.people-tab.active,
+.gi-tab.active,
+.pf-tab.active {
+  color: #4a9eff !important;
+  border-bottom-color: #4a9eff !important;
+}
+
+.pi-tab.active {
+  background: rgba(74, 158, 255, 0.08) !important;
+}
+
+/* Pink theme specific overrides for warm harmony */
+.detail-group .dg-value.count {
+  color: #ff6fa8;
 }
 
 @media (max-width: 700px) {

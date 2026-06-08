@@ -1,50 +1,115 @@
 /* ============================================================
-   SL Inventory Browser — Light Theme (macOS style)
+   SL Inventory Browser — Light Theme (Precision Canvas)
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300..500;1,300..500&display=swap');
 
 :root {
-  /* Backgrounds */
-  --bg:        #f5f5f7;
-  --bg1:       #ffffff;
-  --bg2:       #f0f0f2;
-  --bg3:       #e8e8ed;
+  /* ===== PRECISION CANVAS DESIGN TOKENS ===== */
 
-  /* Borders */
-  --border:    #d1d1d6;
-  --border2:   #b8b8bf;
+  /* Primary Accent */
+  --primary: #0071e3;
+  --primary-grad: linear-gradient(135deg, #0058b0 0%, #0071e3 100%);
+  --primary-fixed: #e8f2ff;
+  --primary-on-fixed: #0071e3;
+
+  /* Surfaces */
+  --surf-dim: #f0f1f2;
+  --surf: #f8f9fa;
+  --surf-low: #f3f4f5;
+  --surf-lowest: #ffffff;
+  --surf-hi: #e1e3e4;
+  --surf-container: #ecedef;
 
   /* Text */
-  --text:      #1d1d1f;
-  --text-dim:  #6e6e73;
-  --text-mute: #aeaeb2;
+  --on-surf: #191c1d;
+  --on-surf-var: #41484a;
+  --secondary: #5c6366;
 
-  /* Accent (macOS blue) */
-  --accent:      #0071e3;
-  --accent2:     #0058b0;
+  /* Outline */
+  --outline-var: #c1c6ca;
+  --ghost-border: rgba(228, 189, 194, 0.15);
+
+  /* Typography */
+  --font-display: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'DM Mono', ui-monospace, monospace;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+  --space-10: 64px;
+
+  /* Shadows */
+  --shadow-ambient: 0px 20px 40px rgba(25, 28, 29, 0.06);
+  --shadow-card: 0px 4px 16px rgba(25, 28, 29, 0.04);
+
+  /* ===== LEGACY COMPATIBILITY (mapped to new tokens) ===== */
+
+  /* Backgrounds (mapped to surfaces) */
+  --bg: var(--surf-dim);
+  --bg1: var(--surf-lowest);
+  --bg2: var(--surf-low);
+  --bg3: var(--surf-container);
+
+  /* Borders */
+  --border: var(--ghost-border);
+  --border2: var(--outline-var);
+
+  /* Text (mapped to new text tokens) */
+  --text: var(--on-surf);
+  --text-dim: var(--on-surf-var);
+  --text-mute: var(--secondary);
+
+  /* Accent (mapped to blue) */
+  --accent: var(--primary);
+  --accent2: #0058b0; /* darker blue for hover states */
   --accent-glow: rgba(0, 113, 227, 0.10);
+  --im-own-text: #0a9b4b; /* keep green for own chat messages */
 
-  /* Status colours */
-  --green:  #28a745;
-  --amber:  #c87e00;
-  --red:    #d70015;
+  /* Status colours (unchanged) */
+  --green: #28a745;
+  --amber: #c87e00;
+  --red: #d70015;
   --purple: #7b3fff;
-  --teal:   #00897b;
+  --teal: #00897b;
 
-  /* Selection */
+  /* Selection (mapped to blue) */
   --selected: rgba(0, 113, 227, 0.10);
-  --hover:    rgba(0, 0, 0, 0.04);
+  --hover: rgba(0, 113, 227, 0.06);
+  --world-map-empty-cell: var(--surf-container);
 
-  /* Layout */
-  --row-h:    26px;
-  --sidebar:  320px;
+  /* Layout (keep existing for compatibility) */
+  --row-h: 26px;
+  --sidebar: 220px; /* reduced per design spec */
   --header-h: 48px;
   --status-h: 28px;
+  --dock-h: 72px;
 
   /* Icon grid */
-  --icon-sz:   100px;
+  --icon-sz: 100px;
   --icon-sz-h: 80px;
+
+  /* Precision Canvas aliases */
+  --active-bg: var(--primary-fixed);
+  --active-fg: var(--primary-on-fixed);
+  --ambient: var(--shadow-ambient);
+
+  /* Window gradients */
+  --floater-gradient: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, transparent), transparent 58%);
 }
 
 @media (max-width: 700px) {
