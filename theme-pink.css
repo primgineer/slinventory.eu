@@ -106,7 +106,7 @@
   /* Precision Canvas aliases */
   --active-bg: rgba(255, 111, 168, 0.15);
   --active-fg: #ff6fa8;
-  --ambient: var(--shadow-ambient);
+  --ambient: rgba(0, 0, 0, 0.35); /* --ambient: var(--shadow-ambient); */
 
   /* Pink theme specific overrides for warm harmony */
   --floater-gradient: linear-gradient(135deg, color-mix(in srgb, #d4a574 16%, transparent), transparent 58%);
