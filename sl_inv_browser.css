@@ -843,7 +843,13 @@ kbd {
 #split-col-header .col-h.sorted { color: var(--accent); }
 #split-col-header .sort-arrow { font-size: 10px; }
 
-/* Split pane rows share .list-row styles — they will render identically */
+/* Split pane rows reuse .list-row, but the pane is narrower than the main
+   content list. Override the fixed column widths to match
+   #split-col-header above (1fr name / 90 type / 95 modified / 55 items) —
+   otherwise each cell shifts left of its header column. */
+#split-pane-list .list-row {
+  grid-template-columns: 1fr 90px 95px 55px;
+}
 
 /* Hide toggle buttons per user request */
 #btn-tabs-toggle,
