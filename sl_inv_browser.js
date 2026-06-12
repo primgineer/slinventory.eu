@@ -196,6 +196,7 @@ snapshot:     `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect
 heart:        `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 13.5C8 13.5 2 9.5 2 5.5A3.5 3.5 0 0 1 8 4.2 3.5 3.5 0 0 1 14 5.5C14 9.5 8 13.5 8 13.5Z" fill="#e85585" opacity=".85" stroke="#e85585" stroke-width=".6" stroke-linejoin="round"/></svg>`,
 link:         `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6.5 9.5a3 3 0 0 0 4.2.1l1.8-1.8a3 3 0 0 0-4.2-4.2L7.2 4.7" stroke="#4a9eff" stroke-width="1.3" stroke-linecap="round" opacity=".7"/><path d="M9.5 6.5a3 3 0 0 0-4.2-.1L3.5 8.2a3 3 0 0 0 4.2 4.2l1.1-1.1" stroke="#4a9eff" stroke-width="1.3" stroke-linecap="round"/></svg>`,
 unknown:      `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="#5a6a80" stroke-width="1.2"/><text x="8" y="11" text-anchor="middle" font-family="monospace" font-size="8" fill="#5a6a80">?</text></svg>`,
+outfit_folder: `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 5.5v1.5M8 5.5Q9 4.5 10 5Q11 5.5 10 6.5Q9 7.5 8 7M8 7L5 11.5M8 7l3 4.5M4 11.5h8" stroke="#4a9eff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
 };
 
 // String preferred_type → icon key
@@ -221,7 +222,7 @@ const FOLDER_TYPE_STR_MAP = {
   'settings':'settings',   'material':'material',   'gltf':'gltf',
   'inbox':'notecard',
   'favorite':'heart',   'favorites':'heart',
-  'my_otfts':'clothing',   'current':'clothing',
+  'my_otfts':'outfit_folder', 'current':'clothing',
 };
 
 function getIconForCategory(folderType) {
